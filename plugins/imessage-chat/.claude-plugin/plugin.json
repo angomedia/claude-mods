@@ -1,6 +1,6 @@
 {
   "name": "imessage-chat",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Draws the chat as iMessage-style bubbles: yours in blue on the right, Claude's in gray on the left",
   "author": { "name": "Ango Media" },
   "license": "MIT",
