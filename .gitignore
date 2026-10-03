@@ -1,0 +1,5 @@
+# Type files Claude Code generates when it loads a mod
+.claude-plugin/types/
+plugins/*/.claude-plugin/types/
+plugins/*/tsconfig.json
+.DS_Store
