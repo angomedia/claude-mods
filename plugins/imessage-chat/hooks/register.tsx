@@ -5,6 +5,11 @@ import type { Mode } from '../types'
 
 const mode = atom({ plugin: 'imessage-chat', key: 'mode' } as const, 'light')
 const isOn = atom({ plugin: 'imessage-chat', key: 'isOn' } as const, true)
+// Prompts sent with images, keyed by their text: the app draws a prompt's images inside its own
+// row, so those rows keep the app's drawing (with the text taken out) above the bubble.
+const withImages = atom({ plugin: 'imessage-chat', key: 'withImages' } as const, [])
+const MAX_TRACKED = 500
+const imageKey = (text: string) => `${text.trim().length}:${text.trim().slice(0, 200)}`
 
 // iOS system colors: outgoing blue, incoming gray.
 const PALETTE = {
@@ -139,6 +144,41 @@ const sentBubble = (text: string, fill: string) => {
   ].join('')
 }
 
+// The texts of this session's prompts that carried images, sent before the mod loaded: prompts as
+// user rows, and prompts sent mid-reply as queued_command attachments. One JSON string per line.
+const FIND_IMAGE_PROMPTS = `
+import glob, json, os, sys
+paths = glob.glob(os.path.expanduser('~/.claude/projects/*/' + sys.argv[1] + '.jsonl'))
+for line in open(paths[0]) if paths else []:
+    row = json.loads(line)
+    content = (row.get('message') or {}).get('content')
+    attachment = row.get('attachment') or {}
+    if attachment.get('type') == 'queued_command':
+        content = attachment.get('prompt')
+    if row.get('type') not in ('user', 'attachment') or not isinstance(content, list):
+        continue
+    if any(block.get('type') == 'image' for block in content):
+        text = ''.join(block.get('text', '') for block in content if block.get('type') == 'text')
+        if text.strip():
+            print(json.dumps(text))
+`
+
+const backfillImages = async ($: EngineInterface) => {
+  try {
+    const { stdout } = await $.process.run(['/usr/bin/python3', '-c', FIND_IMAGE_PROMPTS, await $.session.id()], { timeoutMs: 20_000 })
+    const found = stdout
+      .split('\n')
+      .filter(line => line !== '')
+      .map(line => imageKey(JSON.parse(line) as string))
+
+    if (found.length > 0) {
+      await update($, withImages, list => [...new Set([...list, ...found])].slice(-MAX_TRACKED))
+    }
+  } catch {
+    // No transcript or no python3: only prompts sent from here on are tracked.
+  }
+}
+
 const refreshMode = async ($: EngineInterface) => {
   let next: Mode = 'light'
 
@@ -167,6 +207,7 @@ export const register: Register = on => {
     const saved = await $.store.get('isOn')
     await update($, isOn, () => saved !== false)
     await refreshMode($)
+    void backfillImages($)
     $.clock.every(20_000, () => void refreshMode($))
 
     return started
@@ -180,6 +221,15 @@ export const register: Register = on => {
     await $.store.set('isOn', next)
 
     return { text: next ? 'iMessage bubbles on.' : 'iMessage bubbles off. Run /imessage to turn them back on.' }
+  })
+
+  on('prompt.submit', async ($, e, next) => {
+    if (e.attachments?.some(item => item.type === 'image') && e.text.trim() !== '') {
+      const key = imageKey(e.text)
+      await update($, withImages, list => [...list.filter(one => one !== key), key].slice(-MAX_TRACKED))
+    }
+
+    return next(e)
   })
 
   on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
@@ -198,11 +248,24 @@ export const register: Register = on => {
 
       if (source.length <= MAX_SVG) {
         const { Box, Svg } = $.ui.resolve(e)
-
         // No width or height: the image keeps its own size and scales down in a narrow window.
-        return (
+        const bubble = (
           <Box width="100%" flexDirection="row" justifyContent="flex-end">
             <Svg source={source} alt={text} />
+          </Box>
+        )
+
+        if (!(await read($, withImages)).includes(imageKey(e.props.text))) {
+          return bubble
+        }
+
+        // The app's own row, text removed, still draws the attached images; the bubble goes under them.
+        const images = await next({ ...e, props: { ...e.props, text: '' } })
+
+        return (
+          <Box flexDirection="column">
+            {images}
+            {bubble}
           </Box>
         )
       }

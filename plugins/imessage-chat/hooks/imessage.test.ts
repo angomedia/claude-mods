@@ -28,3 +28,21 @@ test('wraps a long message onto several lines', async $ => {
 
   expect((drawn.match(/<text /g) ?? []).length > 5).toBe(true)
 })
+
+test('keeps the app drawing above the bubble when the prompt had images', async ($, on) => {
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  // Stands in for the app's own drawing of the row.
+  on('ui.render', () => ({ type: 'engine', ref: 1 }) as const)
+  await $.prompt.submit({ text: 'look at this', attachments: [{ type: 'image', mediaType: 'image/png' }], wait: false, origin: { kind: 'composer' } } as any)
+  const ui = await $.ui.mount({ plugin: 'imessage-chat', surface: 'desktop', component: 'UserMessage', props: prompt('look at this') })
+  const drawn = JSON.stringify(await ui.drawn())
+
+  expect(drawn).toContain('"type":"engine"')
+  expect(drawn).toContain('"type":"Svg"')
+})
+
+test('draws only the bubble when the prompt had no images', async $ => {
+  const ui = await $.ui.mount({ plugin: 'imessage-chat', surface: 'desktop', component: 'UserMessage', props: prompt('no pictures here') })
+
+  expect(JSON.stringify(await ui.drawn())).not.toContain('"type":"engine"')
+})
