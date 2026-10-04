@@ -15,6 +15,7 @@ Mods for [Claude Code](https://claude.com/claude-code): plugins that change how 
 | [files-changed](#files-changed) | A pane listing every file Claude changed this session |
 | [break-reminder](#break-reminder) | A countdown to your next break, and a nudge when it's time |
 | [project-notes](#project-notes) | A checklist pane for each project, kept between sessions |
+| [screenshot-attach](#screenshot-attach) | Type `;;ss` and your latest screenshot goes with your message |
 
 Add this repo as a plugin marketplace, then install the mods you want:
 
@@ -29,7 +30,7 @@ claude plugin install typing-bubble@claude-mods
 Or install them all at once:
 
 ```bash
-for mod in imessage-chat session-hud typing-bubble done-chime turn-summary text-expander files-changed break-reminder project-notes; do claude plugin install "$mod@claude-mods"; done
+for mod in imessage-chat session-hud typing-bubble done-chime turn-summary text-expander files-changed break-reminder project-notes screenshot-attach; do claude plugin install "$mod@claude-mods"; done
 ```
 
 Start a new Claude Code session to load them. Mods need a recent Claude Code (2.1.286 or later is tested). The sounds, banners and "open file" buttons use macOS tools; on other systems those parts stay quiet and the rest works.
@@ -41,7 +42,7 @@ claude plugin marketplace update claude-mods
 ```
 
 ```bash
-for mod in imessage-chat session-hud typing-bubble done-chime turn-summary text-expander files-changed break-reminder project-notes; do claude plugin update "$mod@claude-mods"; done
+for mod in imessage-chat session-hud typing-bubble done-chime turn-summary text-expander files-changed break-reminder project-notes screenshot-attach; do claude plugin update "$mod@claude-mods"; done
 ```
 
 To share them, send someone the repo link and the install lines above. A private repo needs them to have access to it.
@@ -188,6 +189,18 @@ A countdown under the message box: *☕ Break in 18m*. After 50 minutes of work 
 - Claude doesn't see your notes unless you share them.
 
 **What it runs on your computer:** `open -t` for Open file.
+
+### screenshot-attach
+
+Attach your latest screenshots to a message without dragging them in.
+
+- **In a message:** put `;;ss` anywhere, and your newest screenshot goes with it. `;;ss3` sends your last three (up to 10). The `;;ss` itself is taken out of your message, and a pop-up says what was attached (*📎 Attached Screenshot 8.41.21 PM (4 min ago)*). Sent on its own, `;;ss` becomes "Here's my latest screenshot."
+- **Before a message:** `/ss` sets your newest screenshot to go with the next message you send, `/ss 3` the last three. The line under the message box says so until you send; `/ss off` cancels.
+- **Where it looks:** the folder macOS saves screenshots to (the Desktop unless you changed it in the Screenshot app's Options), newest first, by the time each was taken. Only files named like screenshots count, so other pictures on your Desktop are left out.
+- **How Claude sees them:** a mod can't put pictures into a message itself, so it tells Claude which screenshot files you attached, and Claude opens each one with its file viewer before answering. You'll see a "Read" step for each.
+- `;;ss` is taken, so don't use it as a text-expander snippet.
+
+**What it runs on your computer:** `defaults read com.apple.screencapture location` to find your screenshot folder. It lists that folder's file names and dates; Claude reads only the screenshots you attach.
 
 ## Adding a mod
 
