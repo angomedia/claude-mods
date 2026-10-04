@@ -1,22 +1,32 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Limit, Snapshot, TurnInfo } from '../types'
+import type { Action, Limit, Snapshot, TurnInfo } from '../types'
 
 const snapshot = atom({ plugin: 'session-hud', key: 'snapshot' } as const, null)
 const turn = atom({ plugin: 'session-hud', key: 'turn' } as const, {})
 const isOn = atom({ plugin: 'session-hud', key: 'isOn' } as const, true)
+const action = atom({ plugin: 'session-hud', key: 'action' } as const, 'idle')
 
 const REFRESH_MS = 5_000
+const CONFIRM_MS = 5_000
 
 // The labels the desktop app's effort picker uses.
 const EFFORT_LABELS: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra', max: 'Max' }
-const LIMIT_LABELS: Record<string, string> = { five_hour: '5h', seven_day: '7d', spend_limit: 'Spend' }
+const LIMIT_LABELS: Record<string, string> = { five_hour: '5-hour limit', seven_day: 'Weekly limit', spend_limit: 'Spend limit' }
 
 // iOS system colors: fine, getting full, nearly out.
 const LEVEL_COLORS = { ok: '#34C759', warn: '#FF9F0A', high: '#FF453A' } as const
-
 const level = (percent: number) => (percent >= 90 ? 'high' : percent >= 70 ? 'warn' : 'ok')
+
+const HANDOFF_PROMPT = [
+  'Write a handoff note so a fresh session with no memory of this conversation can carry on the work.',
+  'Use these sections: Goal (one or two sentences); Current state (what is done, what was verified and what was not);',
+  'Decisions and constraints (each with its reason); Files and places (paths, repos, URLs that matter);',
+  'Next steps (in order); Open questions.',
+  'Be specific: names, paths, commands, versions. Leave out pleasantries and settled detours that do not affect the next steps.',
+  'Keep it under 400 words. Reply with the note alone.',
+].join(' ')
 
 // claude-opus-5-5[1m] -> Opus 5.5 1M; claude-haiku-4-5-20251001 -> Haiku 4.5
 const modelName = (id: string) => {
@@ -40,6 +50,15 @@ const tokens = (count: number) =>
       ? `${Math.round(count / 1_000)}k`
       : `${count}`
 
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+const span = (ms: number) => {
+  const minutes = Math.max(0, Math.round(ms / 60_000))
+
+  return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+}
+
 const clockTime = (date: Date) => {
   const hours = date.getHours()
   const minutes = date.getMinutes()
@@ -47,36 +66,28 @@ const clockTime = (date: Date) => {
   return `${hours % 12 || 12}${minutes === 0 ? '' : `:${String(minutes).padStart(2, '0')}`} ${hours < 12 ? 'AM' : 'PM'}`
 }
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-// Today: "2:40 PM"; within a week: "Tue 9 AM"; further out: "Oct 12".
-const resetTime = (iso: string, now: number) => {
+// Within a day: "resets in 3h 20m"; within a week: "resets Mon 5 AM"; further out: "resets Oct 12".
+const resetText = (iso: string, now: number) => {
   const date = new Date(iso)
+  const ms = date.getTime() - now
 
-  if (Number.isNaN(date.getTime())) {
+  if (Number.isNaN(ms)) {
     return undefined
   }
 
-  if (date.toDateString() === new Date(now).toDateString()) {
-    return clockTime(date)
+  if (ms < 24 * 3_600_000) {
+    return `resets in ${span(ms)}`
   }
 
-  if (date.getTime() - now < 6 * 24 * 3_600_000) {
-    return `${DAYS[date.getDay()]} ${clockTime(date)}`
+  if (ms < 6 * 24 * 3_600_000) {
+    return `resets ${DAYS[date.getDay()]} ${clockTime(date)}`
   }
 
-  return `${MONTHS[date.getMonth()]} ${date.getDate()}`
-}
-
-const duration = (ms: number) => {
-  const minutes = Math.max(0, Math.floor(ms / 60_000))
-
-  return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+  return `resets ${MONTHS[date.getMonth()]} ${date.getDate()}`
 }
 
 const meterSvg = (percent: number) => {
-  const width = 44
+  const width = 96
   const fill = Math.max(0, Math.min(width, (width * percent) / 100))
 
   return [
@@ -88,9 +99,11 @@ const meterSvg = (percent: number) => {
 }
 
 const meterText = (percent: number) => {
-  const filled = Math.round(Math.max(0, Math.min(100, percent)) / 12.5)
+  const clamped = Math.max(0, Math.min(100, percent))
+  // Any use at all shows at least one block.
+  const filled = clamped > 0 ? Math.max(1, Math.round(clamped / 10)) : 0
 
-  return { filled: '█'.repeat(filled), empty: '░'.repeat(8 - filled) }
+  return { filled: '█'.repeat(filled), empty: '░'.repeat(10 - filled) }
 }
 
 const refresh = async ($: EngineInterface) => {
@@ -103,13 +116,76 @@ const refresh = async ($: EngineInterface) => {
     limits: usage.rateLimits.map(({ kind, percentUsed, resetsAt }) => ({ kind, percentUsed, resetsAt })),
     costUsd: usage.cost?.usd,
     startedAt: usage.startedAt,
-    // Whole minutes, so the session clock and reset times redraw once a minute and no more.
+    // Whole minutes, so the session clock and reset countdowns redraw once a minute and no more.
     at: Math.floor(now / 60_000) * 60_000,
   }
-  const current = await read($, snapshot)
 
-  if (JSON.stringify(current) !== JSON.stringify(next)) {
+  if (JSON.stringify(await read($, snapshot)) !== JSON.stringify(next)) {
     await update($, snapshot, () => next)
+  }
+}
+
+const setAction = ($: EngineInterface, next: Action) => update($, action, () => next)
+
+const compact = async ($: EngineInterface) => {
+  await setAction($, 'compacting')
+
+  try {
+    await $.command.run({ command: 'compact' })
+  } catch (error) {
+    $.ui.toast(`Couldn't compact: ${error instanceof Error ? error.message : String(error)}`)
+  } finally {
+    await setAction($, 'idle')
+    void refresh($).catch(() => {})
+  }
+}
+
+// A backup of the note, on the macOS clipboard: the desktop app gives mods no clipboard of its own.
+const copyNote = async ($: EngineInterface, note: string) => {
+  try {
+    await $.process.run(['/usr/bin/pbcopy'], { stdin: note, timeoutMs: 5_000 })
+
+    return true
+  } catch {
+    return false
+  }
+}
+
+const freshStart = async ($: EngineInterface) => {
+  await setAction($, 'handoff')
+
+  try {
+    if (!(await $.command.list()).some(command => command.name === 'clear')) {
+      $.ui.toast("Fresh start needs /clear, which this app doesn't offer.")
+
+      return
+    }
+
+    const reply = await $.model.fork({ prompt: HANDOFF_PROMPT })
+
+    if (!reply.isAnswered) {
+      $.ui.toast(reply.reason === 'nothing-to-fork' ? 'Nothing to hand off yet.' : `Couldn't write the handoff note (${reply.reason}).`)
+
+      return
+    }
+
+    const note = reply.text.trim()
+    const isCopied = await copyNote($, note)
+
+    await $.command.run({ command: 'clear' })
+    // The model reads the note as the fresh conversation's first row; the person sees it as a notice.
+    await $.session.append({
+      message: { type: 'user', content: [{ type: 'text', text: `Handoff note from the previous session, to continue from:\n\n${note}` }] },
+    })
+    await $.session.append({
+      message: { type: 'system', content: [{ type: 'text', text: `Fresh start. Claude has this handoff note from the last session:\n\n${note}` }] },
+    })
+    $.ui.toast(isCopied ? 'Fresh start. The handoff note is also on your clipboard.' : 'Fresh start. Claude has the handoff note.')
+  } catch (error) {
+    $.ui.toast(`Fresh start stopped: ${error instanceof Error ? error.message : String(error)}`)
+  } finally {
+    await setAction($, 'idle')
+    void refresh($).catch(() => {})
   }
 }
 
@@ -124,6 +200,7 @@ export const register: Register = on => {
     })
     const saved = await $.store.get('isOn')
     await update($, isOn, () => saved !== false)
+    await setAction($, 'idle')
     await refresh($)
     $.clock.every(REFRESH_MS, () => void refresh($).catch(() => {}))
 
@@ -168,7 +245,8 @@ export const register: Register = on => {
     }
 
     const { model, effort } = await read($, turn)
-    const { Box, Text } = $.ui.resolve(e)
+    const current = await read($, action)
+    const { Box, Button, Text } = $.ui.resolve(e)
     // The terminal has no Svg: its meters are block characters.
     const Svg = e.surface === 'terminal' ? undefined : $.ui.resolve(e).Svg
 
@@ -187,50 +265,108 @@ export const register: Register = on => {
       return <Svg source={meterSvg(percent)} alt={`${Math.round(percent)}% used`} />
     }
 
-    const segment = (key: string, children: unknown[]) => (
-      <Box key={key} flexDirection="row" alignItems="center" gap={1}>
-        {children.filter(Boolean)}
+    // One column: a label, a reading, and a line of detail. Columns share the width evenly.
+    const tile = (key: string, label: string, reading: unknown[], detail: string) => (
+      <Box key={key} flexDirection="column" flexGrow={1} width={0} minWidth={16}>
+        <Text color="subtle" wrap="truncate-end">
+          {label}
+        </Text>
+        <Box flexDirection="row" alignItems="center" gap={1}>
+          {reading.filter(Boolean)}
+        </Box>
+        <Text color="subtle" wrap="truncate-end">
+          {detail}
+        </Text>
       </Box>
     )
 
-    const segments = [
-      segment('model', [
-        <Text bold>{modelName(model ?? data.model)}</Text>,
-        effort === undefined ? null : <Text color="subtle">{EFFORT_LABELS[effort] ?? effort}</Text>,
-      ]),
-      segment('context', [
-        <Text color="subtle">Context</Text>,
-        data.contextPercent === undefined ? <Text color="subtle">no reply yet</Text> : meter(data.contextPercent),
-        data.contextPercent === undefined ? null : <Text>{`${data.contextPercent}%`}</Text>,
-        <Text color="subtle">
-          {data.contextTokens === undefined ? tokens(data.contextWindow) : `${tokens(data.contextTokens)}/${tokens(data.contextWindow)}`}
-        </Text>,
-      ]),
-      ...data.limits.map((limit: Limit) => {
-        const resets = limit.resetsAt === undefined ? undefined : resetTime(limit.resetsAt, data.at)
+    const contextTile =
+      data.contextPercent === undefined
+        ? tile('context', 'Context', [<Text bold>—</Text>], `${tokens(data.contextWindow)} window`)
+        : tile(
+            'context',
+            'Context',
+            [meter(data.contextPercent), <Text bold>{`${data.contextPercent}%`}</Text>],
+            `${tokens(data.contextTokens ?? 0)} of ${tokens(data.contextWindow)} tokens`,
+          )
 
-        return segment(`limit-${limit.kind}`, [
-          <Text color="subtle">{LIMIT_LABELS[limit.kind] ?? limit.kind}</Text>,
-          meter(limit.percentUsed),
-          <Text>{`${Math.round(limit.percentUsed)}%`}</Text>,
-          resets === undefined ? null : <Text color="subtle">{`resets ${resets}`}</Text>,
-        ])
-      }),
-      data.costUsd === undefined ? null : segment('cost', [<Text color="subtle">{`$${data.costUsd.toFixed(2)}`}</Text>]),
-      segment('time', [<Text color="subtle">{duration(data.at - data.startedAt)}</Text>]),
-    ].filter(Boolean)
+    const limitTiles = data.limits.map((limit: Limit) =>
+      tile(
+        `limit-${limit.kind}`,
+        LIMIT_LABELS[limit.kind] ?? limit.kind,
+        [meter(limit.percentUsed), <Text bold>{`${Math.round(limit.percentUsed)}%`}</Text>],
+        (limit.resetsAt === undefined ? undefined : resetText(limit.resetsAt, data.at)) ?? ' ',
+      ),
+    )
+
+    const sessionTile = tile(
+      'session',
+      'Session',
+      [<Text bold>{span(data.at - data.startedAt)}</Text>],
+      data.costUsd === undefined ? ' ' : `API ≈ $${data.costUsd.toFixed(2)}`,
+    )
+
+    // The desktop app shows the model and effort right under the message box; elsewhere the card does.
+    const modelTile =
+      e.surface === 'desktop'
+        ? null
+        : tile('model', 'Model', [<Text bold>{modelName(model ?? data.model)}</Text>], effort === undefined ? ' ' : `${EFFORT_LABELS[effort] ?? effort} effort`)
+
+    const isBusy = e.props.isWorking || current === 'compacting' || current === 'handoff'
+    const isContextFull = (data.contextPercent ?? 0) >= 70
+
+    const onCompact = () => {
+      if (isBusy) {
+        $.ui.toast('Wait until Claude finishes, then compact.')
+
+        return
+      }
+
+      void compact($)
+    }
+
+    const onFreshStart = async () => {
+      if (isBusy) {
+        $.ui.toast('Wait until Claude finishes, then start fresh.')
+
+        return
+      }
+
+      // First press asks; a second press within a few seconds goes ahead.
+      if (current !== 'confirm') {
+        await setAction($, 'confirm')
+        $.clock.after(CONFIRM_MS, () => {
+          void read($, action).then(now => (now === 'confirm' ? setAction($, 'idle') : undefined))
+        })
+
+        return
+      }
+
+      void freshStart($)
+    }
+
+    const actions = (
+      <Box key="actions" flexDirection="column" alignItems="flex-end" justifyContent="center" gap={0}>
+        <Button
+          key="compact"
+          label={current === 'compacting' ? 'Compacting…' : 'Compact'}
+          variant={isContextFull ? 'primary' : 'secondary'}
+          dimColor={isBusy && current !== 'compacting'}
+          onPress={onCompact}
+        />
+        <Button
+          key="fresh"
+          label={current === 'handoff' ? 'Writing handoff…' : current === 'confirm' ? 'Press again to start fresh' : 'Fresh start'}
+          variant={current === 'confirm' ? 'primary' : 'secondary'}
+          dimColor={isBusy && current !== 'handoff'}
+          onPress={onFreshStart}
+        />
+      </Box>
+    )
 
     return (
-      <Box
-        borderStyle="round"
-        borderColor="promptBorder"
-        paddingX={1}
-        flexDirection="row"
-        flexWrap="wrap"
-        columnGap={3}
-        rowGap={0}
-      >
-        {segments}
+      <Box flexDirection="row" alignItems="center" columnGap={3} paddingX={1}>
+        {[modelTile, contextTile, ...limitTiles, sessionTile, actions].filter(Boolean)}
       </Box>
     )
   })

@@ -39,14 +39,21 @@ Draws the conversation as iMessage-style bubbles: your messages in blue on the r
 
 ### session-hud
 
-A small card above the message box with what a terminal status line would show:
+A small card above the message box, in even columns, each with a label, a reading and one line of detail:
 
-- **Model and effort**, as each request goes out (for example *Opus 5.5 · Extra*).
-- **Context window**: how full it is, with a meter, and tokens used out of the window.
-- **Usage limits**: your 5-hour and weekly windows, how much of each is used, and when each resets.
-- **Session cost** (what the session would cost at API prices) and **how long the session has run**.
+- **Context**: how full the context window is, with a meter, and tokens used out of the window.
+- **5-hour limit** and **Weekly limit**: how much of each is used, and when it resets (a countdown within a day, a day and time beyond that).
+- **Session**: how long it has run, and what it would have cost at API prices (*API ≈ $…*; plans like Max don't charge this).
+- **Model and effort**, in the terminal only: the desktop app already shows them under the message box.
 
-Meters turn orange at 70% and red at 90%. The figures refresh every 5 seconds and after every reply. `/hud off` hides the card, `/hud on` shows it, `/hud` toggles; the choice is remembered. It runs nothing on your computer and reads only Claude Code's own session figures.
+Meters turn orange at 70% and red at 90%. The figures refresh every 5 seconds and after every reply.
+
+Two buttons on the right:
+
+- **Compact** runs `/compact`. It's highlighted once context passes 70%.
+- **Fresh start** asks for a second press, then has Claude write a handoff note (goal, current state, decisions, files, next steps, open questions), runs `/clear`, and gives the note to the fresh conversation. The note shows in the chat, and on a Mac it's also copied to the clipboard. Use it when a long session starts to drift.
+
+Both wait until Claude has finished replying. `/hud off` hides the card, `/hud on` shows it, `/hud` toggles; the choice is remembered. Apart from `pbcopy` for the clipboard copy, it runs nothing on your computer.
 
 ## Adding a mod
 

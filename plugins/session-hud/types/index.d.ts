@@ -13,8 +13,11 @@ export type Snapshot = {
 
 export type TurnInfo = { model?: string; effort?: string }
 
+// What the card's buttons are doing: nothing, waiting on a second press, or running.
+export type Action = 'idle' | 'confirm' | 'compacting' | 'handoff'
+
 declare module 'claude-code' {
   interface PluginState {
-    'session-hud': { snapshot: Snapshot | null; turn: TurnInfo; isOn: boolean }
+    'session-hud': { snapshot: Snapshot | null; turn: TurnInfo; isOn: boolean; action: Action }
   }
 }
