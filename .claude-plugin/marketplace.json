@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "imessage-chat",
-      "description": "Draws the chat as iMessage-style bubbles: yours in blue on the right, Claude's in gray on the left",
+      "description": "Draws the chat as iMessage-style bubbles: yours in blue on the right, Claude's in a softer blue on the left",
       "author": {
         "name": "Ango Media"
       },

@@ -1,20 +1,23 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Mode } from '../types'
+import type { Mode, ReplyColor } from '../types'
 
 const mode = atom({ plugin: 'imessage-chat', key: 'mode' } as const, 'light')
 const isOn = atom({ plugin: 'imessage-chat', key: 'isOn' } as const, true)
+const replyColor = atom({ plugin: 'imessage-chat', key: 'replyColor' } as const, 'blue')
 // Prompts sent with images, keyed by their text: the app draws a prompt's images inside its own
 // row, so those rows keep the app's drawing (with the text taken out) above the bubble.
 const withImages = atom({ plugin: 'imessage-chat', key: 'withImages' } as const, [])
 const MAX_TRACKED = 500
 const imageKey = (text: string) => `${text.trim().length}:${text.trim().slice(0, 200)}`
 
-// iOS system colors: outgoing blue, incoming gray.
+// iOS system colors: outgoing blue, incoming gray. Claude's replies keep the app's own text color,
+// which a mod can't change, so their blue is a soft one in light mode and a deep one in dark mode:
+// the text stays easy to read on both (13:1 and 7.6:1), and the two sides still look different.
 const PALETTE = {
-  light: { blue: '#007AFF', gray: '#E9E9EB' },
-  dark: { blue: '#0A84FF', gray: '#3A3A3C' },
+  light: { blue: '#007AFF', gray: '#E9E9EB', replyBlue: '#B9DBFF' },
+  dark: { blue: '#0A84FF', gray: '#3A3A3C', replyBlue: '#0A4A8F' },
 } as const
 
 // The desktop app's own appearance setting, falling back to macOS's when it follows the system.
@@ -59,7 +62,7 @@ const charWidth = (ch: string) => {
   const code = ch.codePointAt(0) ?? 0
 
   if (code >= 32 && code <= 126) {
-    return SF_15[code - 32]
+    return SF_15[code - 32] ?? 9.5
   }
 
   // CJK and emoji run about one em; rounded up so a line never overflows its bubble.
@@ -200,12 +203,14 @@ export const register: Register = on => {
     const started = await next(e)
     await $.command.register({
       name: 'imessage',
-      description: 'Turn iMessage-style chat bubbles on or off',
-      argumentHint: '[on|off]',
+      description: "Turn iMessage-style chat bubbles on or off, or set the color of Claude's replies",
+      argumentHint: '[on|off|replies blue|replies gray]',
       immediate: true,
     })
     const saved = await $.store.get('isOn')
     await update($, isOn, () => saved !== false)
+    const savedColor = await $.store.get('replyColor')
+    await update($, replyColor, () => (savedColor === 'gray' ? 'gray' : 'blue'))
     await refreshMode($)
     void backfillImages($)
     $.clock.every(20_000, () => void refreshMode($))
@@ -214,13 +219,25 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'imessage' }, async ($, e) => {
-    const arg = e.args.trim().toLowerCase()
-    const wasOn = await read($, isOn)
-    const next = arg === 'on' ? true : arg === 'off' ? false : !wasOn
-    await update($, isOn, () => next)
-    await $.store.set('isOn', next)
+    const [arg = '', value = ''] = e.args.trim().toLowerCase().split(/\s+/)
 
-    return { text: next ? 'iMessage bubbles on.' : 'iMessage bubbles off. Run /imessage to turn them back on.' }
+    if (arg === 'replies' || arg === 'reply') {
+      if (value !== 'blue' && value !== 'gray' && value !== 'grey') {
+        return { text: "Pick a color for Claude's replies: `/imessage replies blue` or `/imessage replies gray`" }
+      }
+
+      const color: ReplyColor = value === 'blue' ? 'blue' : 'gray'
+      await update($, replyColor, () => color)
+      await $.store.set('replyColor', color)
+
+      return { text: `Claude's replies are ${color} now.` }
+    }
+
+    const shown = arg === 'on' ? true : arg === 'off' ? false : !(await read($, isOn))
+    await update($, isOn, () => shown)
+    await $.store.set('isOn', shown)
+
+    return { text: shown ? 'iMessage bubbles on.' : 'iMessage bubbles off. Run /imessage to turn them back on.' }
   })
 
   on('prompt.submit', async ($, e, next) => {
@@ -299,16 +316,17 @@ export const register: Register = on => {
       return next(e)
     }
 
-    const { gray } = PALETTE[await read($, mode)]
+    const palette = PALETTE[await read($, mode)]
+    const fill = (await read($, replyColor)) === 'blue' ? palette.replyBlue : palette.gray
     const { Box, Markdown } = $.ui.resolve(e)
 
     return (
       <Box width="100%" flexDirection="row">
         <Box
           flexShrink={1}
-          backgroundColor={gray}
+          backgroundColor={fill}
           borderStyle="round"
-          borderColor={gray}
+          borderColor={fill}
           paddingX={1}
         >
           <Markdown text={text} />

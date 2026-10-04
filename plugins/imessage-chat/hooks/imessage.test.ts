@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 const prompt = (text: string) => ({ text, origin: { kind: 'composer' }, isExpanded: false }) as const
 
@@ -16,7 +16,7 @@ test('falls back to a box bubble in the terminal', async $ => {
   expect(JSON.stringify(await ui.drawn())).toContain('"borderStyle":"round"')
 })
 
-test("draws Claude's reply as a gray box with markdown", async $ => {
+test("draws Claude's reply as a bubble with markdown", async $ => {
   const ui = await $.ui.mount({ plugin: 'imessage-chat', surface: 'desktop', component: 'AssistantMessage', props: { text: '**hi** there', isFirstOfReply: true } })
 
   expect(JSON.stringify(await ui.drawn())).toContain('"type":"Markdown"')
@@ -45,4 +45,20 @@ test('draws only the bubble when the prompt had no images', async $ => {
   const ui = await $.ui.mount({ plugin: 'imessage-chat', surface: 'desktop', component: 'UserMessage', props: prompt('no pictures here') })
 
   expect(JSON.stringify(await ui.drawn())).not.toContain('"type":"engine"')
+})
+
+test("draws Claude's reply in blue by default, and gray on request", async ($, on) => {
+  mock.store(on)
+  on('session.start', (_$: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  on('command.register', () => ({ value: undefined }) as any)
+  on('process.run', () => ({ value: { exitCode: 0, stdout: 'light\n', stderr: '' } }) as any)
+  await $.session.start({ cwd: '/tmp', surface: 'desktop', isInteractive: true } as any)
+  const reply = { text: '**hi** there', isFirstOfReply: true }
+
+  const blue = await $.ui.mount({ plugin: 'imessage-chat', surface: 'desktop', component: 'AssistantMessage', props: reply })
+  expect(JSON.stringify(await blue.drawn())).toContain('"backgroundColor":"#B9DBFF"')
+
+  await $.command.run({ command: 'imessage', args: 'replies gray' })
+  const gray = await $.ui.mount({ plugin: 'imessage-chat', surface: 'desktop', component: 'AssistantMessage', props: reply })
+  expect(JSON.stringify(await gray.drawn())).toContain('"backgroundColor":"#E9E9EB"')
 })

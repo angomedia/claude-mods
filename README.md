@@ -50,10 +50,11 @@ To share them, send someone the repo link and the install lines above. A private
 
 ### imessage-chat
 
-Draws the conversation as iMessage-style bubbles: your messages in blue on the right, Claude's replies in gray on the left. Tool steps, notifications and messages from other agents keep their normal look.
+Draws the conversation as iMessage-style bubbles: your messages in blue on the right, Claude's replies in a softer blue on the left. Tool steps, notifications and messages from other agents keep their normal look.
 
 - **Your messages** are drawn as true iMessage bubbles: pill-shaped corners, the tail, and the macOS system font. They're pictures, so their text can't be selected. In the terminal, which can't show pictures, they're rounded boxes instead. Images you attach still show, above the bubble.
 - **Claude's replies** stay real text, so formatting, code blocks, links and copying all still work. Their corners use the app's roundest box style, which is a little less round than iMessage's.
+- **Reply color:** a soft blue in light mode and a deep blue in dark mode. A mod can't change the color of the reply text itself, so the blue is chosen to keep the app's text easy to read on it. `/imessage replies gray` switches to iMessage's gray, `/imessage replies blue` back.
 - Mods can't change the app's background or the message box you type in.
 - `/imessage off` turns the bubbles off, `/imessage on` turns them back on, `/imessage` toggles. The choice is remembered.
 - Light and dark colors follow the Claude desktop app's appearance setting on macOS, checked every 20 seconds. Elsewhere they follow Claude Code's own theme.
