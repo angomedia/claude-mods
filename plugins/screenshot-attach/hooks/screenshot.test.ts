@@ -14,14 +14,18 @@ const desktop = [
   { name: 'Screenshots', kind: 'dir', size: 0, mtimeMs: 0, isLink: false },
 ]
 
-const setup = async ($: any, on: any, files: readonly unknown[] = desktop) => {
+const setup = async ($: any, on: any, files: unknown[] = [...desktop], capturing = { now: false }) => {
   const sent: { text: string; context?: string[] }[] = []
   const toasts: string[] = []
   const statuses: (string | undefined)[] = []
-  mock.clock(on, { now: NOW })
+  const clock = mock.clock(on, { now: NOW })
   mock.env(on, { HOME })
-  // No screenshot location set in macOS: the Desktop.
-  on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: 'does not exist' } }) as any)
+  on('process.run', (_$: unknown, e: { argv: string[] }) =>
+    e.argv[0] === '/usr/bin/pgrep'
+      ? ({ value: { exitCode: capturing.now ? 0 : 1, stdout: '', stderr: '' } } as any)
+      : // No screenshot location set in macOS: the Desktop.
+        ({ value: { exitCode: 1, stdout: '', stderr: 'does not exist' } } as any),
+  )
   on('fs.exists', () => ({ value: true }) as any)
   on('fs.list', (_$: unknown, e: { path?: string }) => ({ value: e.path === `${HOME}/Desktop` ? files : [] }) as any)
   on('session.start', (_$: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
@@ -40,7 +44,7 @@ const setup = async ($: any, on: any, files: readonly unknown[] = desktop) => {
   })
   await $.session.start({ cwd: '/tmp', surface: 'desktop', isInteractive: true })
 
-  return { sent, toasts, statuses }
+  return { sent, toasts, statuses, clock, files, capturing }
 }
 
 const send = ($: any, text: string) => $.prompt.submit({ text, wait: false, origin: { kind: 'composer' } })
@@ -96,4 +100,30 @@ test('says so when there are no screenshots', async ($, on) => {
 
   expect(sent.at(-1)?.context).toBeUndefined()
   expect(toasts.at(-1)).toContain('No screenshots found in ~/Desktop')
+})
+
+test('waits for a screenshot that is still saving, then sends that one', async ($, on) => {
+  const capturing = { now: true }
+  const { sent, toasts, clock, files } = await setup($, on, [...desktop], capturing)
+  const sending = send($, 'this one ;;ss')
+  await clock.settle()
+  expect(toasts.at(-1)).toBe('Waiting a moment for your screenshot to save…')
+
+  // macOS saves it a couple of seconds later.
+  await clock.advance(2_000)
+  files.push({ name: 'Screenshot 2026-10-03 at 8.45.10 PM.png', kind: 'file', size: 1, mtimeMs: NOW + 2_000, isLink: false })
+  capturing.now = false
+  await clock.advance(400)
+  await sending
+
+  expect(sent.at(-1)?.context?.join('\n')).toContain('8.45.10 PM.png')
+  expect(toasts.at(-1)).toContain('Attached Screenshot 8.45.10 PM')
+})
+
+test('sends right away when no screenshot is being taken', async ($, on) => {
+  const { sent, toasts } = await setup($, on)
+  await send($, ';;ss')
+
+  expect(toasts.some(toast => toast.startsWith('Waiting'))).toBe(false)
+  expect(sent.at(-1)?.context?.join('\n')).toContain('8.41.21')
 })

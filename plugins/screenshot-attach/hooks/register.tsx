@@ -4,6 +4,10 @@ import type { EngineInterface, Register } from 'claude-code'
 const pending = atom({ plugin: 'screenshot-attach', key: 'pending' } as const, 0)
 
 const MAX = 10
+// macOS shows a new screenshot as a thumbnail in the corner for about five seconds before it
+// saves the file. A message sent in that time waits for it, this long at most.
+const SAVE_WAIT_MS = 7_000
+const POLL_MS = 400
 // ;;ss, or ;;ss3 for the last three, as a word of its own anywhere in the message.
 const TOKEN = /(^|\s);;ss(\d{1,2})?(?=$|\s|[.,!?:)\]])/gi
 // What macOS and the common screenshot apps name their files, in a few languages.
@@ -47,6 +51,36 @@ const latestShots = async ($: EngineInterface, count: number) => {
     .map(entry => ({ path: `${folder}/${entry.name}`, name: entry.name, at: entry.mtimeMs }))
 
   return { shots, folder, home }
+}
+
+// The thumbnail is drawn by screencaptureui, which runs only around a capture.
+const isCapturing = async ($: EngineInterface) => {
+  try {
+    return (await $.process.run(['/usr/bin/pgrep', '-x', 'screencaptureui'], { timeoutMs: 3_000 })).exitCode === 0
+  } catch {
+    return false
+  }
+}
+
+// Waits, while a screenshot is still on its way to the folder, until it lands.
+const waitForSaving = async ($: EngineInterface, signal: AbortSignal) => {
+  if (!(await isCapturing($))) {
+    return
+  }
+
+  $.ui.toast('Waiting a moment for your screenshot to save…')
+  const { shots } = await latestShots($, 1)
+  const before = shots[0]?.at ?? 0
+  const deadline = (await $.clock.now()) + SAVE_WAIT_MS
+
+  while ((await $.clock.now()) < deadline) {
+    await $.clock.sleep(POLL_MS, { signal })
+    const { shots: now } = await latestShots($, 1)
+
+    if ((now[0]?.at ?? 0) > before || !(await isCapturing($))) {
+      return
+    }
+  }
 }
 
 const ago = (ms: number) => {
@@ -154,6 +188,7 @@ export const register: Register = on => {
 
     await update($, pending, () => 0)
     $.ui.status(undefined)
+    await waitForSaving($, next.signal).catch(() => undefined)
     const [{ shots, folder, home }, now] = await Promise.all([latestShots($, wanted), $.clock.now()])
     const text = stripped.replace(/[ \t]{2,}/g, ' ').trim()
 

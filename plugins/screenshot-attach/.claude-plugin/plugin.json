@@ -1,6 +1,6 @@
 {
   "name": "screenshot-attach",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Type ;;ss in a message (or ;;ss3 for three) and your latest screenshots go with it, so you never have to drag them in",
   "author": { "name": "Ango Media" },
   "license": "MIT",

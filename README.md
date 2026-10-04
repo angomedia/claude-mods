@@ -196,11 +196,12 @@ Attach your latest screenshots to a message without dragging them in.
 
 - **In a message:** put `;;ss` anywhere, and your newest screenshot goes with it. `;;ss3` sends your last three (up to 10). The `;;ss` itself is taken out of your message, and a pop-up says what was attached (*📎 Attached Screenshot 8.41.21 PM (4 min ago)*). Sent on its own, `;;ss` becomes "Here's my latest screenshot."
 - **Before a message:** `/ss` sets your newest screenshot to go with the next message you send, `/ss 3` the last three. The line under the message box says so until you send; `/ss off` cancels.
+- **Just took one?** macOS shows a new screenshot as a little preview in the corner for a few seconds before saving it. If you send `;;ss` during that time, the message waits (up to about 7 seconds) for it to save, so you get the one you just took. To skip the wait, turn off **Show Floating Thumbnail** in the Screenshot app's Options (⌘⇧5).
 - **Where it looks:** the folder macOS saves screenshots to (the Desktop unless you changed it in the Screenshot app's Options), newest first, by the time each was taken. Only files named like screenshots count, so other pictures on your Desktop are left out.
 - **How Claude sees them:** a mod can't put pictures into a message itself, so it tells Claude which screenshot files you attached, and Claude opens each one with its file viewer before answering. You'll see a "Read" step for each.
 - `;;ss` is taken, so don't use it as a text-expander snippet.
 
-**What it runs on your computer:** `defaults read com.apple.screencapture location` to find your screenshot folder. It lists that folder's file names and dates; Claude reads only the screenshots you attach.
+**What it runs on your computer:** `defaults read com.apple.screencapture location` to find your screenshot folder, and `pgrep -x screencaptureui` to tell whether a screenshot is still being saved. It lists that folder's file names and dates; Claude reads only the screenshots you attach.
 
 ## Adding a mod
 
