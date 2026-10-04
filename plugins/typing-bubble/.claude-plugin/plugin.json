@@ -1,0 +1,8 @@
+{
+  "name": "typing-bubble",
+  "version": "0.1.0",
+  "description": "Replaces the working spinner with iMessage's typing bubble: three dots pulsing in a gray bubble while Claude works",
+  "author": { "name": "Ango Media" },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

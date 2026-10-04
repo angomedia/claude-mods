@@ -1,0 +1,8 @@
+{
+  "name": "turn-summary",
+  "version": "0.1.0",
+  "description": "Sums up each reply: how long it took, how many tools Claude used, and which files changed by how many lines",
+  "author": { "name": "Ango Media" },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

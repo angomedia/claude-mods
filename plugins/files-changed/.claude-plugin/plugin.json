@@ -1,0 +1,8 @@
+{
+  "name": "files-changed",
+  "version": "0.1.0",
+  "description": "A side pane listing every file Claude changed this session, with lines added and removed. Click one to open it",
+  "author": { "name": "Ango Media" },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "project-notes",
+  "version": "0.1.0",
+  "description": "A notes pane for each project: a checklist you add to, tick off and keep between sessions, saved as a plain Markdown file",
+  "author": { "name": "Ango Media" },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

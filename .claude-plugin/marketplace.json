@@ -23,6 +23,69 @@
       },
       "source": "./plugins/session-hud",
       "category": "productivity"
+    },
+    {
+      "name": "typing-bubble",
+      "description": "Replaces the working spinner with iMessage's typing bubble: three dots pulsing in a gray bubble while Claude works",
+      "author": {
+        "name": "Ango Media"
+      },
+      "source": "./plugins/typing-bubble",
+      "category": "design"
+    },
+    {
+      "name": "done-chime",
+      "description": "Plays a sound when Claude finishes a long reply or asks you something, so you can look away while it works",
+      "author": {
+        "name": "Ango Media"
+      },
+      "source": "./plugins/done-chime",
+      "category": "productivity"
+    },
+    {
+      "name": "turn-summary",
+      "description": "Sums up each reply: how long it took, how many tools Claude used, and which files changed by how many lines",
+      "author": {
+        "name": "Ango Media"
+      },
+      "source": "./plugins/turn-summary",
+      "category": "productivity"
+    },
+    {
+      "name": "text-expander",
+      "description": "Type a short code like ;;t and it becomes a full prompt when you send it. Snippets live in a JSON file you can edit and share",
+      "author": {
+        "name": "Ango Media"
+      },
+      "source": "./plugins/text-expander",
+      "category": "productivity"
+    },
+    {
+      "name": "files-changed",
+      "description": "A side pane listing every file Claude changed this session, with lines added and removed. Click one to open it",
+      "author": {
+        "name": "Ango Media"
+      },
+      "source": "./plugins/files-changed",
+      "category": "productivity"
+    },
+    {
+      "name": "break-reminder",
+      "description": "A countdown to your next break under the message box, and a gentle reminder after 50 minutes of work. Time away counts as a break",
+      "author": {
+        "name": "Ango Media"
+      },
+      "source": "./plugins/break-reminder",
+      "category": "productivity"
+    },
+    {
+      "name": "project-notes",
+      "description": "A notes pane for each project: a checklist you add to, tick off and keep between sessions, saved as a plain Markdown file",
+      "author": {
+        "name": "Ango Media"
+      },
+      "source": "./plugins/project-notes",
+      "category": "productivity"
     }
   ]
 }

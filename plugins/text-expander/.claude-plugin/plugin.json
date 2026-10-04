@@ -1,0 +1,7 @@
+{
+  "name": "text-expander",
+  "version": "0.1.0",
+  "description": "Type a short code like ;;t and it becomes a full prompt when you send it. Snippets live in a JSON file you can edit and share",
+  "author": { "name": "Ango Media" },
+  "license": "MIT"
+}

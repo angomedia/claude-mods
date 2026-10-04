@@ -1,0 +1,7 @@
+{
+  "name": "break-reminder",
+  "version": "0.1.0",
+  "description": "A countdown to your next break under the message box, and a gentle reminder after 50 minutes of work. Time away counts as a break",
+  "author": { "name": "Ango Media" },
+  "license": "MIT"
+}
