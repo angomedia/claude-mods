@@ -25,6 +25,9 @@ const DETECT_MODE = [
 const PULSE_SECONDS = 1.4
 const DOT_DELAY = 0.2
 const FRAME_MS = 350
+// The bubble's size in CSS pixels: as tall as a one-line message bubble, plus its trailing circles.
+const WIDTH = 70
+const HEIGHT = 46
 
 const bubbleSvg = (palette: (typeof PALETTE)[Mode]) => {
   const dot = (cx: number, i: number) =>
@@ -36,7 +39,7 @@ const bubbleSvg = (palette: (typeof PALETTE)[Mode]) => {
     ].join('')
 
   return [
-    '<svg xmlns="http://www.w3.org/2000/svg" width="70" height="46" viewBox="0 0 70 46">',
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 70 46">`,
     `<g fill="${palette.bubble}">`,
     // The bubble, then the two little circles that trail off its bottom-left corner.
     '<rect x="10" y="2" width="58" height="36" rx="18"/>',
@@ -157,9 +160,17 @@ export const register: Register = on => {
 
     const { Box, Svg, Text } = $.ui.resolve(e)
 
+    // Full width and left-aligned, so the bubble sits where Claude's replies start. The size is given
+    // outright: an interactive Svg draws in a frame, which the row would otherwise shrink to fit.
     return (
-      <Box flexDirection="row" alignItems="center" gap={1}>
-        <Svg source={bubbleSvg(palette)} alt={label === '' ? 'Claude is typing' : `Claude is typing: ${label}`} isInteractive />
+      <Box width="100%" flexDirection="row" justifyContent="flex-start" alignItems="center" gap={1}>
+        <Svg
+          source={bubbleSvg(palette)}
+          alt={label === '' ? 'Claude is typing' : `Claude is typing: ${label}`}
+          width={WIDTH}
+          height={HEIGHT}
+          isInteractive
+        />
         {label === '' ? null : <Text color="subtle">{label}</Text>}
       </Box>
     )

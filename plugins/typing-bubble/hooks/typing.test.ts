@@ -25,6 +25,11 @@ test('draws an animated typing bubble on the desktop', async ($, on) => {
   expect(drawn).toContain('"type":"Svg"')
   expect(drawn).toContain('"isInteractive":true')
   expect(drawn).toContain('<animate')
+  // Left-aligned at full size, where Claude's replies start.
+  expect(drawn).toContain('"width":"100%"')
+  expect(drawn).toContain('"justifyContent":"flex-start"')
+  expect(drawn).toContain('"width":70')
+  expect(drawn).toContain('"height":46')
   // "Working" says nothing the dots don't.
   expect(drawn).not.toContain('Working')
 })
