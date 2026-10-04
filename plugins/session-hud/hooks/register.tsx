@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
 import type { Action, Limit, Snapshot, TurnInfo } from '../types'
 
@@ -238,10 +238,12 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    // What other mods draw here (typing-bubble's bubble) stays, above the card.
+    const below = await next(e)
     const data = await read($, snapshot)
 
     if (e.props.hasSurvey || data === null || !(await read($, isOn))) {
-      return next(e)
+      return below
     }
 
     const { model, effort } = await read($, turn)
@@ -266,7 +268,7 @@ export const register: Register = on => {
     }
 
     // One column: a label, a reading, and a line of detail. Columns share the width evenly.
-    const tile = (key: string, label: string, reading: unknown[], detail: string) => (
+    const tile = (key: string, label: string, reading: RenderChildren[], detail: string) => (
       <Box key={key} flexDirection="column" flexGrow={1} width={0} minWidth={16}>
         <Text color="subtle" wrap="truncate-end">
           {label}
@@ -365,8 +367,11 @@ export const register: Register = on => {
     )
 
     return (
-      <Box flexDirection="row" alignItems="center" columnGap={3} paddingX={1}>
-        {[modelTile, contextTile, ...limitTiles, sessionTile, actions].filter(Boolean)}
+      <Box flexDirection="column">
+        {below}
+        <Box flexDirection="row" alignItems="center" columnGap={3} paddingX={1}>
+          {[modelTile, contextTile, ...limitTiles, sessionTile, actions].filter(Boolean)}
+        </Box>
       </Box>
     )
   })

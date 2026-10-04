@@ -53,7 +53,7 @@
     },
     {
       "name": "text-expander",
-      "description": "Type a short code like ;;t and it becomes a full prompt when you send it. Snippets live in a JSON file you can edit and share",
+      "description": "Type a short code like ;;t and it becomes a full prompt when you send it. Manage them in a two-column window with /snippets",
       "author": {
         "name": "Ango Media"
       },

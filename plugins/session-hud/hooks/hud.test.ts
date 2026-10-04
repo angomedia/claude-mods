@@ -47,6 +47,8 @@ for (const surface of ['desktop', 'terminal'] as const) {
     expect(drawn).toContain('API ≈ $16.78')
     expect(drawn).toContain('"label":"Compact"')
     expect(drawn).toContain('"label":"Fresh start"')
+    // What other mods draw in the band (typing-bubble's bubble) stays, above the card.
+    expect(drawn).toContain('"type":"engine"')
     // The desktop shows the model under the message box already.
     expect(drawn.includes('Opus 5.5 1M')).toBe(surface !== 'desktop')
   })

@@ -6,6 +6,7 @@ import type { Mode } from '../types'
 const mode = atom({ plugin: 'typing-bubble', key: 'mode' } as const, 'light')
 const isOn = atom({ plugin: 'typing-bubble', key: 'isOn' } as const, true)
 const frame = atom({ plugin: 'typing-bubble', key: 'frame' } as const, 0)
+const doing = atom({ plugin: 'typing-bubble', key: 'doing' } as const, '')
 
 // iMessage's incoming bubble and its dots, as imessage-chat draws Claude's replies.
 const PALETTE = {
@@ -76,6 +77,39 @@ const refreshMode = async ($: EngineInterface) => {
   }
 }
 
+const baseName = (path: string | undefined) => (path ?? '').split('/').filter(Boolean).pop() ?? ''
+
+const short = (text: string, max = 60) => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
+
+// What a tool call is doing, in a few plain words, for the caption beside the desktop's bubble.
+const describeTool = (tool: string, input: { file_path?: string; notebook_path?: string; description?: string }) => {
+  switch (tool) {
+    case 'Read':
+      return `Reading ${baseName(input.file_path)}`
+    case 'Edit':
+    case 'NotebookEdit':
+      return `Editing ${baseName(input.file_path ?? input.notebook_path)}`
+    case 'Write':
+      return `Writing ${baseName(input.file_path)}`
+    case 'Bash':
+      return input.description === undefined ? 'Running a command' : short(input.description)
+    case 'Grep':
+    case 'Glob':
+      return 'Searching the code'
+    case 'WebSearch':
+      return 'Searching the web'
+    case 'WebFetch':
+      return 'Reading a web page'
+    case 'Agent':
+      return input.description === undefined ? 'Working with a helper' : short(input.description)
+    case 'AskUserQuestion':
+      return ''
+    default:
+      // mcp__server__tool_name -> "Using tool name"
+      return `Using ${tool.split('__').pop()?.replace(/[_-]+/g, ' ') ?? tool}`
+  }
+}
+
 let ticker: Timer | undefined
 
 export const register: Register = on => {
@@ -122,9 +156,25 @@ export const register: Register = on => {
     if (e.agentId === undefined) {
       ticker?.cancel()
       ticker = undefined
+      await update($, doing, () => '')
     }
 
     return done
+  })
+
+  // The caption shows while a tool runs; between tools the bubble is just dots, as in iMessage.
+  on('tool.call', async ($, e, next) => {
+    if (e.agentId !== undefined) {
+      return next(e)
+    }
+
+    await update($, doing, () => describeTool(e.tool, e as unknown as Parameters<typeof describeTool>[1]))
+
+    try {
+      return await next(e)
+    } finally {
+      await update($, doing, () => '')
+    }
   })
 
   on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
@@ -158,20 +208,39 @@ export const register: Register = on => {
       return next(e)
     }
 
+    // On the desktop the bubble sits at the bottom of the chat (the AbovePrompt hook below): the
+    // spinner's row is one line tall and shrinks a picture to fit, so it draws nothing here.
+    const { Box } = $.ui.resolve(e)
+
+    return <Box />
+  })
+
+  // Where iMessage shows it: the last thing in the chat, at the left, just above where you type.
+  // Whatever else draws here (session-hud's card) stays, under the bubble.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const below = await next(e)
+
+    if (e.surface !== 'desktop' || !e.props.isWorking || e.props.hasSurvey || !(await read($, isOn))) {
+      return below
+    }
+
+    const palette = PALETTE[await read($, mode)]
+    const label = await read($, doing)
     const { Box, Svg, Text } = $.ui.resolve(e)
 
-    // Full width and left-aligned, so the bubble sits where Claude's replies start. The size is given
-    // outright: an interactive Svg draws in a frame, which the row would otherwise shrink to fit.
     return (
-      <Box width="100%" flexDirection="row" justifyContent="flex-start" alignItems="center" gap={1}>
-        <Svg
-          source={bubbleSvg(palette)}
-          alt={label === '' ? 'Claude is typing' : `Claude is typing: ${label}`}
-          width={WIDTH}
-          height={HEIGHT}
-          isInteractive
-        />
-        {label === '' ? null : <Text color="subtle">{label}</Text>}
+      <Box flexDirection="column">
+        <Box flexDirection="row" alignItems="center" gap={1} marginBottom={1}>
+          <Svg
+            source={bubbleSvg(palette)}
+            alt={label === '' ? 'Claude is typing' : `Claude is typing: ${label}`}
+            width={WIDTH}
+            height={HEIGHT}
+            isInteractive
+          />
+          {label === '' ? null : <Text color="subtle">{label}</Text>}
+        </Box>
+        {below}
       </Box>
     )
   })

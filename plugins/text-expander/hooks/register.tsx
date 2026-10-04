@@ -1,8 +1,20 @@
+import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
+import type { Draft, SnippetFileView, Where } from '../types'
+
 type Snippets = Record<string, string>
-type Where = 'yours' | 'project'
 type SnippetFile = { where: Where; path: string; snippets: Snippets; error?: string }
+
+const files = atom({ plugin: 'text-expander', key: 'files' } as const, [])
+const draft = atom({ plugin: 'text-expander', key: 'draft' } as const, { trigger: '', text: '' })
+const form = atom({ plugin: 'text-expander', key: 'form' } as const, 0)
+
+const PANE = 'snippets'
+// While the window is open, edits made to the files elsewhere show up within this long.
+const SYNC_MS = 5_000
+// The short-form column, in character cells.
+const TRIGGER_COLUMNS = 14
 
 // Written the first time the mod runs, so there's something to try and a file to copy from.
 const STARTERS: Snippets = {
@@ -55,6 +67,18 @@ const readAll = async ($: EngineInterface) => {
 
 const writeFile = ($: EngineInterface, path: string, snippets: Snippets) => $.fs.write(path, `${JSON.stringify(snippets, null, 2)}\n`)
 
+// Reads both files again and redraws the window if anything changed.
+const refresh = async ($: EngineInterface) => {
+  const { files: found, home } = await readAll($)
+  const views: SnippetFileView[] = found.map(file => ({ ...file, shown: tidy(file.path, home) }))
+
+  if (JSON.stringify(await read($, files)) !== JSON.stringify(views)) {
+    await update($, files, () => views)
+  }
+
+  return views
+}
+
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 // A trigger expands where it stands as a word of its own: after a space or the start, before a
@@ -87,6 +111,7 @@ const table = (snippets: Snippets) =>
   ['| Type | To send |', '| --- | --- |', ...Object.entries(snippets).map(([trigger, text]) => `| \`${trigger}\` | ${cell(text)} |`)].join('\n')
 
 const HELP = [
+  '**The window:** `/snippets` opens a table of your snippets, where you can add and delete them.',
   '**Add one** for every project: `/snippets add ;;x what it expands to`',
   '**Add one** for this project only: `/snippets add-here ;;x what it expands to`',
   '**Remove one:** `/snippets remove ;;x`',
@@ -94,8 +119,8 @@ const HELP = [
 ].join('\n')
 
 const list = async ($: EngineInterface) => {
-  const { files, home } = await readAll($)
-  const sections = files.map(file => {
+  const { files: all, home } = await readAll($)
+  const sections = all.map(file => {
     const title =
       file.where === 'yours'
         ? `**Your snippets**, in every project · \`${tidy(file.path, home)}\``
@@ -129,13 +154,73 @@ const edit = async ($: EngineInterface, where: Where) => {
   }
 }
 
+// Adds or replaces one snippet; answers what happened, in a sentence.
+const addSnippet = async ($: EngineInterface, where: Where, trigger: string, text: string) => {
+  if (trigger === '' || /\s/.test(trigger)) {
+    return { isAdded: false, message: 'The short form is one word with no spaces, like ;;hi' }
+  }
+
+  if (text.trim() === '') {
+    return { isAdded: false, message: `Type what ${trigger} should turn into.` }
+  }
+
+  const all = await paths($)
+  const file = await readFile($, where, where === 'yours' ? all.yours : all.project)
+
+  if (file.error !== undefined) {
+    return { isAdded: false, message: `${tidy(file.path, all.home)} has a mistake, so I left it alone: ${file.error}` }
+  }
+
+  const isUpdate = trigger in file.snippets
+  await writeFile($, file.path, { ...file.snippets, [trigger]: text.trim() })
+  await refresh($)
+
+  return { isAdded: true, message: `${isUpdate ? 'Updated' : 'Added'} ${trigger}${where === 'project' ? ' for this project' : ''}.` }
+}
+
+const removeSnippet = async ($: EngineInterface, trigger: string, only?: Where) => {
+  const { files: all } = await readAll($)
+  const holding = all.filter(file => file.error === undefined && trigger in file.snippets && (only === undefined || file.where === only))
+
+  for (const file of holding) {
+    const { [trigger]: _removed, ...rest } = file.snippets
+    await writeFile($, file.path, rest)
+  }
+
+  await refresh($)
+
+  return holding.length > 0
+}
+
+const isOpen = async ($: EngineInterface) => (await $.ui.panes()).some(pane => pane.id === PANE)
+
+const openWindow = async ($: EngineInterface) => {
+  const views = await refresh($)
+  const count = views.reduce((sum, file) => sum + Object.keys(file.snippets).length, 0)
+  await $.ui.open({ id: PANE, title: 'Snippets', focus: true, closeOnEscape: true, rows: count + 10, columns: 90 })
+
+  return count
+}
+
+// The add row: what's typed so far is kept as it's typed, and Add (or Enter) adds it.
+const submitDraft = async ($: EngineInterface, typed: Partial<Draft>) => {
+  const current = { ...(await read($, draft)), ...typed }
+  const result = await addSnippet($, 'yours', current.trigger.trim(), current.text)
+  $.ui.toast(result.message)
+
+  if (result.isAdded) {
+    await update($, draft, () => ({ trigger: '', text: '' }))
+    await update($, form, n => n + 1)
+  }
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     await $.command.register({
       name: 'snippets',
-      description: 'List, add or remove text snippets (type ;;t to send a whole prompt)',
-      argumentHint: '[add|add-here|remove|edit]',
+      description: 'Open your snippets: short forms like ;;t that turn into whole prompts when you send them',
+      argumentHint: '[list|add|add-here|remove|edit]',
       immediate: true,
     })
 
@@ -150,6 +235,13 @@ export const register: Register = on => {
       await $.store.set('seeded', true)
     }
 
+    await refresh($).catch(() => undefined)
+    $.clock.every(SYNC_MS, () => {
+      void isOpen($)
+        .then(open => (open ? refresh($) : undefined))
+        .catch(() => {})
+    })
+
     return started
   })
 
@@ -158,9 +250,9 @@ export const register: Register = on => {
       return next(e)
     }
 
-    const { files } = await readAll($)
+    const { files: all } = await readAll($)
     // This project's snippets win over yours.
-    const snippets = { ...files[0].snippets, ...files[1].snippets }
+    const snippets = { ...all[0].snippets, ...all[1].snippets }
     const { text, used } = expand(e.text, snippets)
 
     if (used.length === 0) {
@@ -178,7 +270,19 @@ export const register: Register = on => {
     const action = word.toLowerCase()
     const text = args.slice(word.length).trim().slice(trigger.length).trim()
 
-    if (action === '' || action === 'list') {
+    if (action === '' || action === 'open') {
+      if (await isOpen($)) {
+        await $.ui.close({ id: PANE })
+
+        return { text: 'Snippets closed. `/snippets` opens them again.' }
+      }
+
+      const count = await openWindow($)
+
+      return { text: `Snippets open: ${count} snippet${count === 1 ? '' : 's'}. Add a row at the bottom, or ✕ to delete one.` }
+    }
+
+    if (action === 'list') {
       return { text: await list($) }
     }
 
@@ -186,41 +290,147 @@ export const register: Register = on => {
       return { text: await edit($, trigger.toLowerCase() === 'here' ? 'project' : 'yours') }
     }
 
-    const all = await paths($)
-
     if (action === 'add' || action === 'add-here') {
       if (trigger === '' || text === '') {
         return { text: `Give a trigger and what it expands to: \`/snippets ${action} ;;x your text\`` }
       }
 
-      const file = await readFile($, action === 'add' ? 'yours' : 'project', action === 'add' ? all.yours : all.project)
+      const result = await addSnippet($, action === 'add' ? 'yours' : 'project', trigger, text)
 
-      if (file.error !== undefined) {
-        return { text: `\`${tidy(file.path, all.home)}\` has a mistake, so I left it alone: ${file.error}` }
-      }
-
-      const isUpdate = trigger in file.snippets
-      await writeFile($, file.path, { ...file.snippets, [trigger]: text })
-
-      return { text: `${isUpdate ? 'Updated' : 'Added'} \`${trigger}\`${action === 'add-here' ? ' for this project' : ''}. Type it in a message to send: ${cell(text, 200)}` }
+      return { text: result.isAdded ? `${result.message} Type it in a message to send: ${cell(text, 200)}` : result.message }
     }
 
     if (action === 'remove' || action === 'delete') {
-      const { files } = await readAll($)
-      const holding = files.filter(file => file.error === undefined && trigger in file.snippets)
-
-      if (holding.length === 0) {
-        return { text: `There's no \`${trigger}\` snippet. \`/snippets\` lists them.` }
-      }
-
-      for (const file of holding) {
-        const { [trigger]: _removed, ...rest } = file.snippets
-        await writeFile($, file.path, rest)
-      }
-
-      return { text: `Removed \`${trigger}\`.` }
+      return { text: (await removeSnippet($, trigger)) ? `Removed \`${trigger}\`.` : `There's no \`${trigger}\` snippet. \`/snippets list\` lists them.` }
     }
 
     return { text: HELP }
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const all = await read($, files)
+    const formKey = await read($, form)
+    const { Box, Button, Text } = $.ui.resolve(e)
+
+    const header = (
+      <Box key="header" flexDirection="row" gap={2}>
+        <Box width={TRIGGER_COLUMNS} flexShrink={0}>
+          <Text bold color="subtle">
+            Short form
+          </Text>
+        </Box>
+        <Box flexGrow={1} flexShrink={1} width={0}>
+          <Text bold color="subtle">
+            Turns into
+          </Text>
+        </Box>
+      </Box>
+    )
+
+    const rows = (file: SnippetFileView) =>
+      Object.entries(file.snippets).map(([trigger, text]) => (
+        <Box key={`row:${file.where}:${trigger}`} flexDirection="row" gap={2}>
+          <Box width={TRIGGER_COLUMNS} flexShrink={0}>
+            <Text bold wrap="truncate-end">
+              {trigger}
+            </Text>
+          </Box>
+          <Box flexGrow={1} flexShrink={1} width={0}>
+            <Text wrap="wrap">{text}</Text>
+          </Box>
+          <Button
+            key={`delete:${file.where}:${trigger}`}
+            label="✕"
+            plain
+            dimColor
+            onPress={() =>
+              void removeSnippet($, trigger, file.where).then(() => $.ui.toast(`Deleted ${trigger}`))
+            }
+          />
+        </Box>
+      ))
+
+    const section = (file: SnippetFileView) => {
+      const title = file.where === 'yours' ? `Yours, in every project · ${file.shown}` : `This project only · ${file.shown}`
+
+      if (file.error !== undefined) {
+        return (
+          <Box key={`section:${file.where}`} flexDirection="column" marginBottom={1}>
+            <Text dimColor>{title}</Text>
+            <Text wrap="wrap">{`This file has a mistake, so none of its snippets work: ${file.error}`}</Text>
+          </Box>
+        )
+      }
+
+      if (Object.keys(file.snippets).length === 0) {
+        return file.where === 'yours' ? (
+          <Box key={`section:${file.where}`} flexDirection="column" marginBottom={1}>
+            <Text dimColor>{title}</Text>
+            <Text dimColor>None yet. Add one below.</Text>
+          </Box>
+        ) : null
+      }
+
+      return (
+        <Box key={`section:${file.where}`} flexDirection="column" marginBottom={1}>
+          <Text dimColor>{title}</Text>
+          {rows(file)}
+        </Box>
+      )
+    }
+
+    // The mobile app has no text field yet; there, snippets are added with /snippets add.
+    let addRow = null
+
+    if (e.surface !== 'mobile') {
+      const { Input } = $.ui.resolve(e)
+      const textKey = `text-${formKey}`
+
+      addRow = (
+        <Box key="add" flexDirection="row" gap={2} alignItems="center">
+          <Box width={TRIGGER_COLUMNS} flexShrink={0}>
+            <Input
+              key={`trigger-${formKey}`}
+              placeholder=";;hi"
+              submitLabel="next"
+              autoFocus
+              onInput={value => void update($, draft, current => ({ ...current, trigger: value }))}
+              onSubmit={value => {
+                void update($, draft, current => ({ ...current, trigger: value })).then(() =>
+                  $.ui.focus({ requestId: PANE, key: textKey }).catch(() => undefined),
+                )
+              }}
+            />
+          </Box>
+          <Box flexGrow={1} flexShrink={1} width={0}>
+            <Input
+              key={textKey}
+              placeholder="What it turns into when you send it"
+              submitLabel="add"
+              onInput={value => void update($, draft, current => ({ ...current, text: value }))}
+              onSubmit={value => void submitDraft($, { text: value })}
+            />
+          </Box>
+          <Button key="add" label="Add" variant="primary" onPress={() => void submitDraft($, {})} />
+        </Box>
+      )
+    }
+
+    return (
+      <Box flexDirection="column" paddingX={1}>
+        <Text dimColor wrap="wrap">
+          Type a short form in a message; it turns into the long form when you send it.
+        </Text>
+        <Box flexDirection="column" marginY={1}>
+          {header}
+          {all.map(section)}
+        </Box>
+        {addRow}
+        <Box flexDirection="row" gap={1} marginTop={1}>
+          <Button key="edit" label="Open file" onPress={() => void edit($, 'yours').then(message => $.ui.toast(message.replace(/`/g, '')))} />
+          <Button key="close" label="Done" role="dismiss" onPress={() => void $.ui.close({ id: PANE })} />
+        </Box>
+      </Box>
+    )
   })
 }

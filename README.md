@@ -81,10 +81,11 @@ Both wait until Claude has finished replying. `/hud off` hides the card, `/hud o
 
 ### typing-bubble
 
-While Claude works, the spinner becomes iMessage's typing bubble: a gray bubble with three dots that pulse left to right. When Claude is running a step, what it's doing shows beside the bubble (*Creating notes.md*).
+While Claude works, you see iMessage's typing bubble: a gray bubble with three dots that pulse left to right.
 
-- Colors follow light and dark mode the same way imessage-chat does. In the terminal, the dots step along in a small gray chip.
-- While it's on, the spinner's elapsed time and token count don't show.
+- **Desktop app:** the bubble sits where iMessage puts it, at the bottom of the chat on the left, just above where you type (above session-hud's card, if you have it). While Claude runs a step, what it's doing shows beside the bubble (*Editing notes.md*, *Searching the code*). The app's own one-line spinner is hidden while the bubble is on.
+- **Terminal:** the dots step along in a small gray chip, in place of the spinner.
+- Colors follow light and dark mode the same way imessage-chat does.
 - `/typing off` brings the normal spinner back, `/typing on` the bubble; the choice is remembered.
 
 **What it runs on your computer:** the same light/dark check as imessage-chat (it reads `userThemeMode` from the Claude app's `config.json`, then `defaults read -g AppleInterfaceStyle`), once per reply.
@@ -124,14 +125,18 @@ It starts with six snippets:
 | `;;p` | Make a plan first and wait for my OK before changing any files. |
 | `;;c` | Commit these changes with a clear message. |
 
-**Keeping track of them.** `/snippets` lists every snippet you have and the file it's saved in.
+**Managing them.** `/snippets` opens the Snippets window: a two-column table of each short form and what it turns into.
 
-**Adding, changing and removing them:**
+- **Add a row:** type the short form (like `;;hi`) in the first box at the bottom, press Enter, type what it turns into, and press Enter or **Add**. Adding a short form you already have replaces its text.
+- **Delete a row:** click ✕ at the end of it.
+- **Open file** opens the snippets file in your text editor; **Done** or Esc closes the window. `/snippets` again closes it too.
 
-- `/snippets add ;;bug Find the root cause before fixing anything.` adds one for every project. Adding a trigger that exists replaces its text.
+The same things from the message box:
+
+- `/snippets list` prints them all, with the files they're in.
+- `/snippets add ;;bug Find the root cause before fixing anything.` adds one for every project.
 - `/snippets add-here ;;deploy Run ./deploy.sh staging and show me the output.` adds one for this project only.
-- `/snippets remove ;;bug` removes one.
-- `/snippets edit` opens your snippets file in your text editor; `/snippets edit here` opens this project's.
+- `/snippets remove ;;bug` removes one, and `/snippets edit` (or `/snippets edit here`) opens the file.
 
 **Where they're saved.** Snippets are plain JSON, one `"trigger": "text"` pair each:
 
