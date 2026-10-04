@@ -35,7 +35,7 @@
     },
     {
       "name": "done-chime",
-      "description": "Plays a sound when Claude finishes a long reply or asks you something, so you can look away while it works",
+      "description": "Plays iMessage's tone when Claude finishes a reply or asks you something, so you can look away while it works",
       "author": {
         "name": "Ango Media"
       },

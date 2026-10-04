@@ -1,7 +1,7 @@
 {
   "name": "done-chime",
-  "version": "0.1.0",
-  "description": "Plays a sound when Claude finishes a long reply or asks you something, so you can look away while it works",
+  "version": "0.1.1",
+  "description": "Plays iMessage's tone when Claude finishes a reply or asks you something, so you can look away while it works",
   "author": { "name": "Ango Media" },
   "license": "MIT"
 }

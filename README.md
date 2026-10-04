@@ -9,7 +9,7 @@ Mods for [Claude Code](https://claude.com/claude-code): plugins that change how 
 | [imessage-chat](#imessage-chat) | Draws the chat as iMessage bubbles |
 | [session-hud](#session-hud) | A card above the message box with context, usage limits and cost |
 | [typing-bubble](#typing-bubble) | iMessage's typing bubble while Claude works |
-| [done-chime](#done-chime) | A sound when a long reply is done or Claude asks you something |
+| [done-chime](#done-chime) | A sound when a reply is done or Claude asks you something |
 | [turn-summary](#turn-summary) | How long each reply took, tools used, files and lines changed |
 | [text-expander](#text-expander) | Type `;;t` and send a whole prompt |
 | [files-changed](#files-changed) | A pane listing every file Claude changed this session |
@@ -91,10 +91,10 @@ While Claude works, the spinner becomes iMessage's typing bubble: a gray bubble 
 
 ### done-chime
 
-Plays iMessage's "new message" sound when a reply took 30 seconds or more, so you can look away while Claude works. When Claude asks you something (a question dialog, or a permission prompt where the app reports one), it plays the question tone instead.
+Plays iMessage's "new message" sound when Claude finishes a reply, so you can look away while it works. When Claude asks you something (a question dialog, or a permission prompt where the app reports one), it plays the question tone instead.
 
 - From the terminal it also shows a macOS notification banner when you're in another app. The desktop app has notifications of its own, so there it only plays the sound unless you turn banners on.
-- `/chime` shows the settings. `/chime test` plays it. `/chime after 60` chimes only for replies of a minute or more. `/chime sound glass` changes the sound: `message`, `question`, or one of macOS's `basso`, `blow`, `bottle`, `frog`, `funk`, `glass`, `hero`, `morse`, `ping`, `pop`, `purr`, `sosumi`, `submarine`, `tink`. `/chime questions off` stops the question tone. `/chime banner on|off|auto` sets the banner. `/chime off` turns it all off.
+- `/chime` shows the settings. `/chime test` plays it. `/chime after 60` chimes only for replies that took a minute or more (`/chime after 0` goes back to every reply). `/chime sound glass` changes the sound: `message`, `question`, or one of macOS's `basso`, `blow`, `bottle`, `frog`, `funk`, `glass`, `hero`, `morse`, `ping`, `pop`, `purr`, `sosumi`, `submarine`, `tink`. `/chime questions off` stops the question tone. `/chime banner on|off|auto` sets the banner. `/chime off` turns it all off.
 
 **What it runs on your computer:** `afplay` to play the sound, `lsappinfo` to see which app is in front, and `osascript` to show the banner.
 

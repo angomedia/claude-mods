@@ -19,7 +19,7 @@ const SOUNDS: Record<string, string> = {
 type Banner = 'auto' | 'on' | 'off'
 type Settings = { isOn: boolean; afterSeconds: number; sound: string; questionSound: string; banner: Banner; isQuestionOn: boolean }
 
-const DEFAULTS: Settings = { isOn: true, afterSeconds: 30, sound: 'message', questionSound: 'question', banner: 'auto', isQuestionOn: true }
+const DEFAULTS: Settings = { isOn: true, afterSeconds: 0, sound: 'message', questionSound: 'question', banner: 'auto', isQuestionOn: true }
 
 // What the terminal app is called in the Dock, by $TERM_PROGRAM.
 const TERMINAL_APPS: Record<string, string> = {
@@ -117,7 +117,7 @@ const announce = async ($: EngineInterface, sound: string, title: string, body: 
 
 const HELP = [
   '`/chime on` · `/chime off` · `/chime test`',
-  '`/chime after 60`: only chime for replies that took at least 60 seconds',
+  '`/chime after 60`: only chime for replies that took at least 60 seconds (`/chime after 0`: every reply)',
   '`/chime sound glass`: change the sound',
   '`/chime questions off`: no chime when Claude asks you something',
   '`/chime banner on|off|auto`: macOS notification banner too (auto: from the terminal only)',
@@ -125,7 +125,11 @@ const HELP = [
 
 const describe = (settings: Settings) =>
   [
-    settings.isOn ? `Chime is **on** for replies that take ${settings.afterSeconds}s or longer.` : 'Chime is **off**.',
+    !settings.isOn
+      ? 'Chime is **off**.'
+      : settings.afterSeconds === 0
+        ? 'Chime is **on** for every reply.'
+        : `Chime is **on** for replies that take ${settings.afterSeconds}s or longer.`,
     `Sound: ${settings.sound} · questions: ${settings.isQuestionOn ? settings.questionSound : 'off'} · banner: ${settings.banner}`,
     '',
     HELP,
@@ -173,7 +177,7 @@ export const register: Register = on => {
 
       await saveSettings($, { ...settings, afterSeconds: Math.round(seconds) })
 
-      return { text: `Chiming for replies that take ${Math.round(seconds)}s or longer.` }
+      return { text: Math.round(seconds) === 0 ? 'Chiming after every reply.' : `Chiming for replies that take ${Math.round(seconds)}s or longer.` }
     }
 
     if (word === 'sound' || word === 'question-sound') {

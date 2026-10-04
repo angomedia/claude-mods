@@ -34,9 +34,17 @@ test('chimes with the iMessage tone after a long reply', async ($, on) => {
   expect(banners(ran)).toHaveLength(0)
 })
 
-test('stays quiet after a quick reply', async ($, on) => {
+test('chimes after every reply by default, even a quick one', async ($, on) => {
   const { ran, clock } = await setup($, on)
-  await $.turn.complete(turn(5_000))
+  await $.turn.complete(turn(2_000))
+  await clock.settle()
+
+  expect(played(ran)).toHaveLength(1)
+})
+
+test('stays quiet after an interrupted reply', async ($, on) => {
+  const { ran, clock } = await setup($, on)
+  await $.turn.complete({ ...turn(45_000), isAborted: true, reason: 'aborted' })
   await clock.settle()
 
   expect(played(ran)).toHaveLength(0)
