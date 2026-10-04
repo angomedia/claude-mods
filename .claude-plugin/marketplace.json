@@ -2,14 +2,27 @@
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "claude-mods",
   "description": "Ango Media's mods for Claude Code",
-  "owner": { "name": "Ango Media" },
+  "owner": {
+    "name": "Ango Media"
+  },
   "plugins": [
     {
       "name": "imessage-chat",
       "description": "Draws the chat as iMessage-style bubbles: yours in blue on the right, Claude's in gray on the left",
-      "author": { "name": "Ango Media" },
+      "author": {
+        "name": "Ango Media"
+      },
       "source": "./plugins/imessage-chat",
       "category": "design"
+    },
+    {
+      "name": "session-hud",
+      "description": "A card above the message box with the model, effort, context window, usage limits and their reset times, cost and session length",
+      "author": {
+        "name": "Ango Media"
+      },
+      "source": "./plugins/session-hud",
+      "category": "productivity"
     }
   ]
 }
