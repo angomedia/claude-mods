@@ -1,20 +1,19 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Draft, SnippetFileView, Where } from '../types'
+import type { SnippetFileView, Where } from '../types'
 
 type Snippets = Record<string, string>
 type SnippetFile = { where: Where; path: string; snippets: Snippets; error?: string }
 
 const files = atom({ plugin: 'text-expander', key: 'files' } as const, [])
-const draft = atom({ plugin: 'text-expander', key: 'draft' } as const, { trigger: '', text: '' })
 const form = atom({ plugin: 'text-expander', key: 'form' } as const, 0)
 
 const PANE = 'snippets'
 // While the window is open, edits made to the files elsewhere show up within this long.
 const SYNC_MS = 5_000
 // The short-form column, in character cells.
-const TRIGGER_COLUMNS = 14
+const TRIGGER_COLUMNS = 10
 
 // Written the first time the mod runs, so there's something to try and a file to copy from.
 const STARTERS: Snippets = {
@@ -202,14 +201,24 @@ const openWindow = async ($: EngineInterface) => {
   return count
 }
 
-// The add row: what's typed so far is kept as it's typed, and Add (or Enter) adds it.
-const submitDraft = async ($: EngineInterface, typed: Partial<Draft>) => {
-  const current = { ...(await read($, draft)), ...typed }
-  const result = await addSnippet($, 'yours', current.trigger.trim(), current.text)
+// The add row is one field: the short form, a space, then what it turns into (";;hi How are you?").
+// One field, because the desktop draws a button beside every field.
+const addFromField = async ($: EngineInterface, value: string) => {
+  const typed = value.trim()
+  const trigger = typed.split(/\s+/)[0] ?? ''
+  // "=" or ":" between the two is fine too: ";;hi = How are you?"
+  const text = typed.slice(trigger.length).replace(/^\s*[=:→]\s*/, '').trim()
+
+  if (trigger === '') {
+    $.ui.toast('Type the short form, a space, then what it turns into: ;;hi How are you?')
+
+    return
+  }
+
+  const result = await addSnippet($, 'yours', trigger, text)
   $.ui.toast(result.message)
 
   if (result.isAdded) {
-    await update($, draft, () => ({ trigger: '', text: '' }))
     await update($, form, n => n + 1)
   }
 }
@@ -384,34 +393,19 @@ export const register: Register = on => {
 
     if (e.surface !== 'mobile') {
       const { Input } = $.ui.resolve(e)
-      const textKey = `text-${formKey}`
 
       addRow = (
-        <Box key="add" flexDirection="row" gap={2} alignItems="center">
-          <Box width={TRIGGER_COLUMNS} flexShrink={0}>
-            <Input
-              key={`trigger-${formKey}`}
-              placeholder=";;hi"
-              submitLabel="next"
-              autoFocus
-              onInput={value => void update($, draft, current => ({ ...current, trigger: value }))}
-              onSubmit={value => {
-                void update($, draft, current => ({ ...current, trigger: value })).then(() =>
-                  $.ui.focus({ requestId: PANE, key: textKey }).catch(() => undefined),
-                )
-              }}
-            />
-          </Box>
-          <Box flexGrow={1} flexShrink={1} width={0}>
-            <Input
-              key={textKey}
-              placeholder="What it turns into when you send it"
-              submitLabel="add"
-              onInput={value => void update($, draft, current => ({ ...current, text: value }))}
-              onSubmit={value => void submitDraft($, { text: value })}
-            />
-          </Box>
-          <Button key="add" label="Add" variant="primary" onPress={() => void submitDraft($, {})} />
+        <Box key="add" flexDirection="column">
+          <Input
+            key={`add-${formKey}`}
+            placeholder=";;hi How are you doing?"
+            submitLabel="Add"
+            autoFocus
+            onSubmit={value => void addFromField($, value)}
+          />
+          <Text dimColor wrap="wrap">
+            The short form first, then a space, then what it turns into.
+          </Text>
         </Box>
       )
     }

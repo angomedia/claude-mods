@@ -1,6 +1,6 @@
 {
   "name": "text-expander",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Type a short code like ;;t and it becomes a full prompt when you send it. Manage them in a two-column window with /snippets",
   "author": { "name": "Ango Media" },
   "license": "MIT",

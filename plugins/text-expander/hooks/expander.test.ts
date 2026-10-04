@@ -133,11 +133,10 @@ for (const surface of ['desktop', 'terminal'] as const) {
     const { disk, submitted } = await setup($, on)
     const ui = await mountWindow($, surface)
 
-    await ui.input({ key: 'trigger-0', text: ';;hi', kind: 'change' })
-    await ui.input({ key: 'text-0', text: 'Hello Claude, here is what I need:' })
+    await ui.input({ key: 'add-0', text: ';;hi Hello Claude, here is what I need:' })
     expect(JSON.parse(disk[YOURS])[';;hi']).toBe('Hello Claude, here is what I need:')
-    // The add row starts over, empty.
-    expect(JSON.stringify(await ui.drawn())).toContain('"key":"trigger-1"')
+    // The add field starts over, empty.
+    expect(JSON.stringify(await ui.drawn())).toContain('"key":"add-1"')
 
     await send($, ';;hi')
     expect(submitted.at(-1)).toBe('Hello Claude, here is what I need:')
@@ -148,11 +147,16 @@ for (const surface of ['desktop', 'terminal'] as const) {
   })
 }
 
-test('the Add button says what is missing', async ($, on) => {
-  const { toasts } = await setup($, on)
+test('one field and no extra buttons; it says what is missing', async ($, on) => {
+  const { toasts, disk } = await setup($, on)
   const ui = await mountWindow($)
-  await ui.input({ key: 'trigger-0', text: ';;x', kind: 'change' })
-  await ui.press({ key: 'add' })
+  const drawn = JSON.stringify(await ui.drawn())
+  expect((drawn.match(/"type":"Input"/g) ?? []).length).toBe(1)
+  expect(drawn).not.toContain('"label":"Add"')
 
+  await ui.input({ key: 'add-0', text: ';;x' })
   expect(toasts.at(-1)).toBe('Type what ;;x should turn into.')
+
+  await ui.input({ key: 'add-0', text: ';;bye = See you later!' })
+  expect(JSON.parse(disk[YOURS])[';;bye']).toBe('See you later!')
 })

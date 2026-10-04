@@ -113,7 +113,7 @@ Sums up each reply: how long it took, how many tools Claude used, and which file
 
 ### text-expander
 
-Type a short trigger like `;;t` anywhere in a message, and when you send it, it's swapped for the full text. A small pop-up says what was expanded, and your message shows the full text.
+Type a short trigger like `;;t` anywhere in a message, and when you send it, it's swapped for the full text. The swap happens as the message is sent, not while you type (mods can't change the message box): a small pop-up says what was expanded, and your message shows the full text.
 
 It starts with six snippets:
 
@@ -128,7 +128,7 @@ It starts with six snippets:
 
 **Managing them.** `/snippets` opens the Snippets window: a two-column table of each short form and what it turns into.
 
-- **Add a row:** type the short form (like `;;hi`) in the first box at the bottom, press Enter, type what it turns into, and press Enter or **Add**. Adding a short form you already have replaces its text.
+- **Add a row:** in the box at the bottom, type the short form, a space, then what it turns into (`;;hi How are you doing?`), and press Enter or **Add**. Adding a short form you already have replaces its text.
 - **Delete a row:** click ✕ at the end of it.
 - **Open file** opens the snippets file in your text editor; **Done** or Esc closes the window. `/snippets` again closes it too.
 
