@@ -2,10 +2,12 @@ import type { EngineInterface, Register } from 'claude-code'
 
 const SYSTEM_SOUNDS = '/System/Library/Sounds'
 const TONES = '/System/Library/PrivateFrameworks/ToneLibrary.framework/Versions/A/Resources/AlertTones'
+const UI_SOUNDS = '/System/Library/Components/CoreAudio.component/Contents/SharedSupport/SystemSounds/system'
 
-// The two iMessage tones first, then macOS's own alert sounds.
+// iMessage's tones first (received, sent, question), then macOS's own alert sounds.
 const SOUNDS: Record<string, string> = {
   message: `${TONES}/ReceivedMessage.caf`,
+  sent: `${UI_SOUNDS}/SentMessage.caf`,
   question: `${TONES}/Text-Message-Acknowledgement-QuestionMark.caf`,
   ...Object.fromEntries(
     ['Basso', 'Blow', 'Bottle', 'Frog', 'Funk', 'Glass', 'Hero', 'Morse', 'Ping', 'Pop', 'Purr', 'Sosumi', 'Submarine', 'Tink'].map(name => [
@@ -17,9 +19,30 @@ const SOUNDS: Record<string, string> = {
 
 // `auto` shows a macOS banner from the terminal only: the desktop app has notifications of its own.
 type Banner = 'auto' | 'on' | 'off'
-type Settings = { isOn: boolean; afterSeconds: number; sound: string; questionSound: string; banner: Banner; isQuestionOn: boolean }
+type Settings = {
+  isOn: boolean
+  afterSeconds: number
+  sound: string
+  questionSound: string
+  sentSound: string
+  banner: Banner
+  isQuestionOn: boolean
+  isSentOn: boolean
+}
 
-const DEFAULTS: Settings = { isOn: true, afterSeconds: 0, sound: 'message', questionSound: 'question', banner: 'auto', isQuestionOn: true }
+const DEFAULTS: Settings = {
+  isOn: true,
+  afterSeconds: 0,
+  sound: 'message',
+  questionSound: 'question',
+  sentSound: 'sent',
+  banner: 'auto',
+  isQuestionOn: true,
+  isSentOn: true,
+}
+
+// Prompts the person sent; notifications and other agents' messages make no sound.
+const OWN_PROMPTS = new Set(['composer', 'bridge', 'sdk'])
 
 // What the terminal app is called in the Dock, by $TERM_PROGRAM.
 const TERMINAL_APPS: Record<string, string> = {
@@ -118,7 +141,8 @@ const announce = async ($: EngineInterface, sound: string, title: string, body: 
 const HELP = [
   '`/chime on` · `/chime off` · `/chime test`',
   '`/chime after 60`: only chime for replies that took at least 60 seconds (`/chime after 0`: every reply)',
-  '`/chime sound glass`: change the sound',
+  '`/chime sound glass`: change the sound for replies',
+  '`/chime sent off`: no swoosh when your message is sent (`/chime sent-sound pop` changes it)',
   '`/chime questions off`: no chime when Claude asks you something',
   '`/chime banner on|off|auto`: macOS notification banner too (auto: from the terminal only)',
 ].join('\n')
@@ -130,7 +154,7 @@ const describe = (settings: Settings) =>
       : settings.afterSeconds === 0
         ? 'Chime is **on** for every reply.'
         : `Chime is **on** for replies that take ${settings.afterSeconds}s or longer.`,
-    `Sound: ${settings.sound} · questions: ${settings.isQuestionOn ? settings.questionSound : 'off'} · banner: ${settings.banner}`,
+    `Replies: ${settings.sound} · your messages: ${settings.isSentOn ? settings.sentSound : 'off'} · questions: ${settings.isQuestionOn ? settings.questionSound : 'off'} · banner: ${settings.banner}`,
     '',
     HELP,
   ].join('\n')
@@ -140,7 +164,7 @@ export const register: Register = on => {
     const started = await next(e)
     await $.command.register({
       name: 'chime',
-      description: 'Sound when Claude finishes a long reply or asks you something',
+      description: 'Sounds when your message is sent, when Claude replies, and when Claude asks you something',
       argumentHint: '[on|off|test|after <seconds>|sound <name>]',
       immediate: true,
     })
@@ -180,16 +204,22 @@ export const register: Register = on => {
       return { text: Math.round(seconds) === 0 ? 'Chiming after every reply.' : `Chiming for replies that take ${Math.round(seconds)}s or longer.` }
     }
 
-    if (word === 'sound' || word === 'question-sound') {
+    if (word === 'sound' || word === 'question-sound' || word === 'sent-sound') {
       if (!(value in SOUNDS)) {
         return { text: `Pick one of: ${Object.keys(SOUNDS).join(', ')}` }
       }
 
-      const changed = word === 'sound' ? { ...settings, sound: value } : { ...settings, questionSound: value }
-      await saveSettings($, changed)
+      const key = word === 'sound' ? 'sound' : word === 'sent-sound' ? 'sentSound' : 'questionSound'
+      await saveSettings($, { ...settings, [key]: value })
       await play($, value)
 
-      return { text: `${word === 'sound' ? 'Sound' : 'Question sound'} set to "${value}".` }
+      return { text: `${word === 'sound' ? 'Reply sound' : word === 'sent-sound' ? 'Sent sound' : 'Question sound'} set to "${value}".` }
+    }
+
+    if (word === 'sent' && (value === 'on' || value === 'off')) {
+      await saveSettings($, { ...settings, isSentOn: value === 'on' })
+
+      return { text: `Sent swoosh ${value}.` }
     }
 
     if (word === 'questions' && (value === 'on' || value === 'off')) {
@@ -205,6 +235,23 @@ export const register: Register = on => {
     }
 
     return { text: HELP }
+  })
+
+  // iMessage's swoosh once your message has reached Claude.
+  on('prompt.submit', async ($, e, next) => {
+    const entered = await next(e)
+
+    if (OWN_PROMPTS.has(e.origin.kind) && 'text' in entered) {
+      void (async () => {
+        const settings = await loadSettings($)
+
+        if (settings.isOn && settings.isSentOn) {
+          await play($, settings.sentSound)
+        }
+      })().catch(() => {})
+    }
+
+    return entered
   })
 
   on('turn.complete', async ($, e, next) => {

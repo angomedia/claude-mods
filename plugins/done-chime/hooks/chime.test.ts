@@ -10,6 +10,7 @@ const setup = async ($: any, on: any, surface: 'desktop' | 'terminal' = 'desktop
   on('session.surface', () => ({ value: surface }) as any)
   on('command.register', () => ({ value: undefined }) as any)
   on('turn.complete', () => ({ text: '' }))
+  on('prompt.submit', (_$: unknown, e: { text: string }) => ({ text: e.text }))
   on('process.run', (_$: unknown, e: { argv: string[] }) => {
     ran.push(e.argv)
     // Someone is looking at another app.
@@ -79,4 +80,20 @@ test('chimes when Claude asks a question', async ($, on) => {
   await clock.settle()
 
   expect(played(ran)).toEqual([expect.stringContaining('QuestionMark.caf')])
+})
+
+test('swooshes when your message is sent, and not for a notification', async ($, on) => {
+  const { ran, clock } = await setup($, on)
+  await $.prompt.submit({ text: 'hello', wait: false, origin: { kind: 'composer' } } as any)
+  await clock.settle()
+  expect(played(ran)).toEqual([expect.stringContaining('SentMessage.caf')])
+
+  await $.prompt.submit({ text: 'task done', wait: false, origin: { kind: 'task-notification' } } as any)
+  await clock.settle()
+  expect(played(ran)).toHaveLength(1)
+
+  await $.command.run({ command: 'chime', args: 'sent off' })
+  await $.prompt.submit({ text: 'hello again', wait: false, origin: { kind: 'composer' } } as any)
+  await clock.settle()
+  expect(played(ran)).toHaveLength(1)
 })

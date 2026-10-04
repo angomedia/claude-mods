@@ -35,7 +35,7 @@
     },
     {
       "name": "done-chime",
-      "description": "Plays iMessage's tone when Claude finishes a reply or asks you something, so you can look away while it works",
+      "description": "iMessage's sounds: a swoosh when your message is sent, a tone when Claude's reply arrives or Claude asks you something",
       "author": {
         "name": "Ango Media"
       },
