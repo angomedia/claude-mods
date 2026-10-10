@@ -1,6 +1,6 @@
 {
   "name": "session-hud",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A card above the message box with the model, effort, context window, usage limits and their reset times, cost and session length",
   "author": { "name": "Ango Media" },
   "license": "MIT",

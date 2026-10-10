@@ -201,7 +201,8 @@ export const register: Register = on => {
     const saved = await $.store.get('isOn')
     await update($, isOn, () => saved !== false)
     await setAction($, 'idle')
-    await refresh($)
+    // A first reading that fails still leaves the timer running: the card fills in on its next tick.
+    await refresh($).catch(() => {})
     $.clock.every(REFRESH_MS, () => void refresh($).catch(() => {}))
 
     return started
@@ -238,7 +239,7 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    // What other mods draw here (typing-bubble's bubble) stays, above the card.
+    // What other mods draw here stays, above the card.
     const below = await next(e)
     const data = await read($, snapshot)
 
@@ -337,9 +338,8 @@ export const register: Register = on => {
       // First press asks; a second press within a few seconds goes ahead.
       if (current !== 'confirm') {
         await setAction($, 'confirm')
-        $.clock.after(CONFIRM_MS, () => {
-          void read($, action).then(now => (now === 'confirm' ? setAction($, 'idle') : undefined))
-        })
+        // One read-and-write, so a press that lands as the timer fires (Compacting, the handoff) stands.
+        $.clock.after(CONFIRM_MS, () => void update($, action, now => (now === 'confirm' ? 'idle' : now)).catch(() => {}))
 
         return
       }

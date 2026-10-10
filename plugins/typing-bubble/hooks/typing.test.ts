@@ -19,49 +19,35 @@ const setup = async ($: any, on: any) => {
 
 const band = (isWorking: boolean) => ({ hasSurvey: false, isWorking, maxRows: 10, bodyColumns: 120, scroll: {}, view: {} }) as any
 
-test('draws an animated typing bubble at the bottom of the chat on the desktop', async ($, on) => {
+test('draws an animated one-line typing bubble in the spinner row on the desktop', async ($, on) => {
   await setup($, on)
-  const ui = await $.ui.mount({ plugin: 'typing-bubble', surface: 'desktop', component: 'AbovePrompt', props: band(true) })
+  const ui = await $.ui.mount({ plugin: 'typing-bubble', surface: 'desktop', component: 'Spinner', props: spinner('Working') })
   const drawn = JSON.stringify(await ui.drawn())
 
   expect(drawn).toContain('"type":"Svg"')
   expect(drawn).toContain('"isInteractive":true')
   expect(drawn).toContain('<animate')
-  expect(drawn).toContain('"width":70')
-  expect(drawn).toContain('"height":46')
-  // What else draws there (session-hud's card) stays, under the bubble.
-  expect(drawn).toContain('"type":"engine"')
-})
-
-test('shows nothing extra there while Claude is idle', async ($, on) => {
-  await setup($, on)
-  const ui = await $.ui.mount({ plugin: 'typing-bubble', surface: 'desktop', component: 'AbovePrompt', props: band(false) })
-
-  expect(JSON.stringify(await ui.drawn())).not.toContain('"type":"Svg"')
-})
-
-test("hides the desktop's one-line spinner, which the bubble replaces", async ($, on) => {
-  await setup($, on)
-  const ui = await $.ui.mount({ plugin: 'typing-bubble', surface: 'desktop', component: 'Spinner', props: spinner('Working') })
-  const drawn = JSON.stringify(await ui.drawn())
-
+  expect(drawn).toContain('"width":40')
+  expect(drawn).toContain('"height":18')
+  // It stands in for the row: the app's own spinner isn't drawn, and "Working" says nothing.
   expect(drawn).not.toContain('"type":"engine"')
-  expect(drawn).not.toContain('Svg')
+  expect(drawn).not.toContain('Working')
 })
 
-test('says what Claude is doing beside the bubble while a tool runs', async ($, on) => {
-  let seen = ''
-  on('tool.call', async () => {
-    // Look at the band while the tool is still running.
-    seen = JSON.stringify(await ui.drawn())
-    return { result: {} } as any
-  })
+test("says what Claude is doing beside the bubble, in the row's own words", async ($, on) => {
+  await setup($, on)
+  const ui = await $.ui.mount({ plugin: 'typing-bubble', surface: 'desktop', component: 'Spinner', props: spinner('Editing notes.md') })
+
+  expect(JSON.stringify(await ui.drawn())).toContain('Editing notes.md')
+})
+
+test("leaves the band above the message box to other mods, so it's never inside session-hud's card", async ($, on) => {
   await setup($, on)
   const ui = await $.ui.mount({ plugin: 'typing-bubble', surface: 'desktop', component: 'AbovePrompt', props: band(true) })
-  await $.tool.call({ tool: 'Edit', tool_use_id: 'e1', file_path: '/work/app/src/notes.md', old_string: 'a', new_string: 'b' } as any)
+  const drawn = JSON.stringify(await ui.drawn())
 
-  expect(seen).toContain('Editing notes.md')
-  expect(JSON.stringify(await ui.drawn())).not.toContain('Editing notes.md')
+  expect(drawn).toContain('"type":"engine"')
+  expect(drawn).not.toContain('Svg')
 })
 
 test('steps the dots in the terminal while a turn runs', async ($, on) => {
@@ -85,10 +71,10 @@ test('steps the dots in the terminal while a turn runs', async ($, on) => {
 
 test('/typing off gives the spinner back', async ($, on) => {
   await setup($, on)
-  await $.command.run({ command: 'typing', args: 'off' })
+  await $.command.run({ command: 'typing', args: 'off' } as any)
   const spinnerRow = await $.ui.mount({ plugin: 'typing-bubble', surface: 'desktop', component: 'Spinner', props: spinner('Working') })
-  const bandRow = await $.ui.mount({ plugin: 'typing-bubble', surface: 'desktop', component: 'AbovePrompt', props: band(true) })
+  const drawn = JSON.stringify(await spinnerRow.drawn())
 
-  expect(JSON.stringify(await spinnerRow.drawn())).toContain('"type":"engine"')
-  expect(JSON.stringify(await bandRow.drawn())).not.toContain('"type":"Svg"')
+  expect(drawn).toContain('"type":"engine"')
+  expect(drawn).not.toContain('Svg')
 })

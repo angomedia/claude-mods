@@ -47,7 +47,7 @@ for (const surface of ['desktop', 'terminal'] as const) {
     expect(drawn).toContain('API ≈ $16.78')
     expect(drawn).toContain('"label":"Compact"')
     expect(drawn).toContain('"label":"Fresh start"')
-    // What other mods draw in the band (typing-bubble's bubble) stays, above the card.
+    // What other mods draw in the band stays, above the card.
     expect(drawn).toContain('"type":"engine"')
     // The desktop shows the model under the message box already.
     expect(drawn.includes('Opus 5.5 1M')).toBe(surface !== 'desktop')
@@ -76,4 +76,26 @@ test('Fresh start asks first, then hands off and clears', async ($, on) => {
   // The note is written before anything is cleared. (The test kit can't stand in for
   // session.append, so the two rows that follow /clear aren't checked here.)
   expect(calls.slice(0, 2)).toEqual(['fork', '/clear'])
+})
+
+test('a failed first reading still fills the card on the next refresh', async ($, on) => {
+  let calls = 0
+  on('session.usage', () => {
+    calls += 1
+    if (calls === 1) {
+      throw new Error('not ready')
+    }
+    return { value: usage } as any
+  })
+  const clock = mock.clock(on, { now: Date.now() })
+  mock.store(on)
+  on('session.model', () => ({ value: 'claude-opus-5-5[1m]' }))
+  on('session.start', (_$: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  on('command.register', () => ({ value: undefined }) as any)
+  on('ui.render', () => ({ type: 'engine', ref: 1 }) as const)
+  await $.session.start({ cwd: '/tmp', surface: 'desktop', isInteractive: true })
+  await clock.advance(5_000)
+
+  const ui = await $.ui.mount({ plugin: 'session-hud', surface: 'desktop', component: 'AbovePrompt', props: band })
+  expect(JSON.stringify(await ui.drawn())).toContain('383k of 1M tokens')
 })

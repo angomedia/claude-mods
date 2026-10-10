@@ -16,6 +16,7 @@ Mods for [Claude Code](https://claude.com/claude-code): plugins that change how 
 | [break-reminder](#break-reminder) | A countdown to your next break, and a nudge when it's time |
 | [project-notes](#project-notes) | A checklist pane for each project, kept between sessions |
 | [screenshot-attach](#screenshot-attach) | Type `;;ss` and your latest screenshot goes with your message |
+| [agent-threads](#agent-threads) | A pane with the main thread and every subagent: model, cost and a progress bar each |
 
 Add this repo as a plugin marketplace, then install the mods you want:
 
@@ -30,7 +31,7 @@ claude plugin install typing-bubble@claude-mods
 Or install them all at once:
 
 ```bash
-for mod in imessage-chat session-hud typing-bubble done-chime turn-summary text-expander files-changed break-reminder project-notes screenshot-attach; do claude plugin install "$mod@claude-mods"; done
+for mod in imessage-chat session-hud typing-bubble done-chime turn-summary text-expander files-changed break-reminder project-notes screenshot-attach agent-threads; do claude plugin install "$mod@claude-mods"; done
 ```
 
 Start a new Claude Code session to load them. Mods need a recent Claude Code (2.1.286 or later is tested). The sounds, banners and "open file" buttons use macOS tools; on other systems those parts stay quiet and the rest works.
@@ -42,7 +43,7 @@ claude plugin marketplace update claude-mods
 ```
 
 ```bash
-for mod in imessage-chat session-hud typing-bubble done-chime turn-summary text-expander files-changed break-reminder project-notes screenshot-attach; do claude plugin update "$mod@claude-mods"; done
+for mod in imessage-chat session-hud typing-bubble done-chime turn-summary text-expander files-changed break-reminder project-notes screenshot-attach agent-threads; do claude plugin update "$mod@claude-mods"; done
 ```
 
 To share them, send someone the repo link and the install lines above. A private repo needs them to have access to it.
@@ -85,7 +86,7 @@ Both wait until Claude has finished replying. `/hud off` hides the card, `/hud o
 
 While Claude works, you see iMessage's typing bubble: a gray bubble with three dots that pulse left to right.
 
-- **Desktop app:** the bubble sits where iMessage puts it, at the bottom of the chat on the left, just above where you type (above session-hud's card, if you have it). While Claude runs a step, what it's doing shows beside the bubble (*Editing notes.md*, *Searching the code*). The app's own one-line spinner is hidden while the bubble is on.
+- **Desktop app:** the bubble takes the place of the app's one-line "working" row at the bottom of the chat, with what Claude is doing beside it (*Editing notes.md*). That row is one line of text tall, so the bubble is too, without iMessage's two little trailing circles. It stays out of the strip above the message box, where session-hud's card goes.
 - **Terminal:** the dots step along in a small gray chip, in place of the spinner.
 - Colors follow light and dark mode the same way imessage-chat does.
 - `/typing off` brings the normal spinner back, `/typing on` the bubble; the choice is remembered.
@@ -211,6 +212,20 @@ Attach your latest screenshots to a message without dragging them in.
 - `;;ss` is taken, so don't use it as a text-expander snippet.
 
 **What it runs on your computer:** `defaults read com.apple.screencapture location` to find your screenshot folder, and `pgrep -x screencaptureui` to tell whether a screenshot is still being saved. It lists that folder's file names and dates; Claude reads only the screenshots you attach.
+
+### agent-threads
+
+`/threads` opens a pane beside the chat that shows the main thread and every subagent Claude starts, each nested under the thread that started it.
+
+- **Overall** at the top: one bar for this turn's subagents (*2 of 3 agents done · 1 running*), how long the session has run, and what it would have cost at API prices.
+- **Each thread** shows its status, the model and effort it runs on, a progress bar, what it's doing right now (*Reading auth.ts*), how long it has run, how many tools it used, its estimated cost, and how big its context is. The main thread shows the context window's fill instead.
+- **The progress bars.** A thread that keeps a task list gets a real bar: *3 of 5 steps*. A thread without one gets an estimate, marked with *~*: it compares the tool calls so far with how many that kind of agent (`Explore`, `general-purpose`, the main thread) usually needed in your past sessions (*5 of ~10 tools*). The first time there's no history to go on, so it guesses 15 for a subagent and 8 for a main-thread turn, then learns from every run that finishes. An estimated bar stops at 95% until the agent actually finishes; then it's full and green. Failed is red, stopped is gray.
+- **Cost.** Each subagent's cost is estimated from its own token counts at Anthropic's list prices (fast mode and 1-hour cache writes cost more than that). The main thread shows the session's exact total less the subagents' estimates, so the figures add up to the total.
+- **Earlier turns.** Finished subagents from earlier turns move to an *Earlier* list, one line each. **Clear finished** (or `/threads clear`) removes them.
+- The pane opens by itself the first time a subagent starts in a session. `/threads auto off` stops that, `/threads auto on` brings it back; the choice is remembered. `/threads` opens and closes it any time.
+- In a narrow terminal a pane can't open by itself; a pop-up points you to `/threads` instead.
+
+It runs nothing on your computer. The only thing it keeps between sessions is how many tool calls each kind of agent took, to measure the estimated bars against.
 
 ## Adding a mod
 

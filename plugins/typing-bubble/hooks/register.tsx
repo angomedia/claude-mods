@@ -6,7 +6,6 @@ import type { Mode } from '../types'
 const mode = atom({ plugin: 'typing-bubble', key: 'mode' } as const, 'light')
 const isOn = atom({ plugin: 'typing-bubble', key: 'isOn' } as const, true)
 const frame = atom({ plugin: 'typing-bubble', key: 'frame' } as const, 0)
-const doing = atom({ plugin: 'typing-bubble', key: 'doing' } as const, '')
 
 // iMessage's incoming bubble and its dots, as imessage-chat draws Claude's replies.
 const PALETTE = {
@@ -26,30 +25,26 @@ const DETECT_MODE = [
 const PULSE_SECONDS = 1.4
 const DOT_DELAY = 0.2
 const FRAME_MS = 350
-// The bubble's size in CSS pixels: as tall as a one-line message bubble, plus its trailing circles.
-const WIDTH = 70
-const HEIGHT = 46
+// The bubble's size in CSS pixels: one line of text tall, so the desktop's spinner row draws it
+// whole. That row can't be taller, which leaves no room for iMessage's trailing circles.
+const WIDTH = 40
+const HEIGHT = 18
 
 const bubbleSvg = (palette: (typeof PALETTE)[Mode]) => {
   const dot = (cx: number, i: number) =>
     [
-      `<circle cx="${cx}" cy="20" r="4.2" fill="${palette.dot}" opacity="0.35">`,
+      `<circle cx="${cx}" cy="9" r="2.4" fill="${palette.dot}" opacity="0.35">`,
       `<animate attributeName="opacity" values="0.35;1;0.35;0.35" keyTimes="0;0.2;0.45;1" dur="${PULSE_SECONDS}s" begin="${(i * DOT_DELAY).toFixed(2)}s" repeatCount="indefinite"/>`,
-      `<animate attributeName="r" values="4.2;4.8;4.2;4.2" keyTimes="0;0.2;0.45;1" dur="${PULSE_SECONDS}s" begin="${(i * DOT_DELAY).toFixed(2)}s" repeatCount="indefinite"/>`,
+      `<animate attributeName="r" values="2.4;2.8;2.4;2.4" keyTimes="0;0.2;0.45;1" dur="${PULSE_SECONDS}s" begin="${(i * DOT_DELAY).toFixed(2)}s" repeatCount="indefinite"/>`,
       '</circle>',
     ].join('')
 
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 70 46">`,
-    `<g fill="${palette.bubble}">`,
-    // The bubble, then the two little circles that trail off its bottom-left corner.
-    '<rect x="10" y="2" width="58" height="36" rx="18"/>',
-    '<circle cx="12" cy="34" r="6"/>',
-    '<circle cx="4" cy="42" r="3"/>',
-    '</g>',
-    dot(27, 0),
-    dot(39, 1),
-    dot(51, 2),
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">`,
+    `<rect x="1" y="1" width="38" height="16" rx="8" fill="${palette.bubble}"/>`,
+    dot(13, 0),
+    dot(20, 1),
+    dot(27, 2),
     '</svg>',
   ].join('')
 }
@@ -74,39 +69,6 @@ const refreshMode = async ($: EngineInterface) => {
 
   if ((await read($, mode)) !== next) {
     await update($, mode, () => next)
-  }
-}
-
-const baseName = (path: string | undefined) => (path ?? '').split('/').filter(Boolean).pop() ?? ''
-
-const short = (text: string, max = 60) => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
-
-// What a tool call is doing, in a few plain words, for the caption beside the desktop's bubble.
-const describeTool = (tool: string, input: { file_path?: string; notebook_path?: string; description?: string }) => {
-  switch (tool) {
-    case 'Read':
-      return `Reading ${baseName(input.file_path)}`
-    case 'Edit':
-    case 'NotebookEdit':
-      return `Editing ${baseName(input.file_path ?? input.notebook_path)}`
-    case 'Write':
-      return `Writing ${baseName(input.file_path)}`
-    case 'Bash':
-      return input.description === undefined ? 'Running a command' : short(input.description)
-    case 'Grep':
-    case 'Glob':
-      return 'Searching the code'
-    case 'WebSearch':
-      return 'Searching the web'
-    case 'WebFetch':
-      return 'Reading a web page'
-    case 'Agent':
-      return input.description === undefined ? 'Working with a helper' : short(input.description)
-    case 'AskUserQuestion':
-      return ''
-    default:
-      // mcp__server__tool_name -> "Using tool name"
-      return `Using ${tool.split('__').pop()?.replace(/[_-]+/g, ' ') ?? tool}`
   }
 }
 
@@ -156,25 +118,9 @@ export const register: Register = on => {
     if (e.agentId === undefined) {
       ticker?.cancel()
       ticker = undefined
-      await update($, doing, () => '')
     }
 
     return done
-  })
-
-  // The caption shows while a tool runs; between tools the bubble is just dots, as in iMessage.
-  on('tool.call', async ($, e, next) => {
-    if (e.agentId !== undefined) {
-      return next(e)
-    }
-
-    await update($, doing, () => describeTool(e.tool, e as unknown as Parameters<typeof describeTool>[1]))
-
-    try {
-      return await next(e)
-    } finally {
-      await update($, doing, () => '')
-    }
   })
 
   on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
@@ -208,39 +154,21 @@ export const register: Register = on => {
       return next(e)
     }
 
-    // On the desktop the bubble sits at the bottom of the chat (the AbovePrompt hook below): the
-    // spinner's row is one line tall and shrinks a picture to fit, so it draws nothing here.
-    const { Box } = $.ui.resolve(e)
-
-    return <Box />
-  })
-
-  // Where iMessage shows it: the last thing in the chat, at the left, just above where you type.
-  // Whatever else draws here (session-hud's card) stays, under the bubble.
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const below = await next(e)
-
-    if (e.surface !== 'desktop' || !e.props.isWorking || e.props.hasSurvey || !(await read($, isOn))) {
-      return below
-    }
-
-    const palette = PALETTE[await read($, mode)]
-    const label = await read($, doing)
+    // On the desktop the bubble takes the spinner's row at the bottom of the chat, outside the band
+    // above the message box that session-hud's card draws in. Beside it, the row's own words for
+    // the step (`Editing notes.md`).
     const { Box, Svg, Text } = $.ui.resolve(e)
 
     return (
-      <Box flexDirection="column">
-        <Box flexDirection="row" alignItems="center" gap={1} marginBottom={1}>
-          <Svg
-            source={bubbleSvg(palette)}
-            alt={label === '' ? 'Claude is typing' : `Claude is typing: ${label}`}
-            width={WIDTH}
-            height={HEIGHT}
-            isInteractive
-          />
-          {label === '' ? null : <Text color="subtle">{label}</Text>}
-        </Box>
-        {below}
+      <Box flexDirection="row" alignItems="center" gap={1}>
+        <Svg
+          source={bubbleSvg(palette)}
+          alt={label === '' ? 'Claude is typing' : `Claude is typing: ${label}`}
+          width={WIDTH}
+          height={HEIGHT}
+          isInteractive
+        />
+        {label === '' ? null : <Text color="subtle">{label}</Text>}
       </Box>
     )
   })

@@ -95,6 +95,15 @@
       },
       "source": "./plugins/screenshot-attach",
       "category": "productivity"
+    },
+    {
+      "name": "agent-threads",
+      "description": "A side pane with the main thread and every subagent Claude starts: each one's model, estimated cost and a progress bar, with the overall progress on top",
+      "author": {
+        "name": "Ango Media"
+      },
+      "source": "./plugins/agent-threads",
+      "category": "productivity"
     }
   ]
 }

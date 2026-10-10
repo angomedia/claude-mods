@@ -1,0 +1,8 @@
+{
+  "name": "agent-threads",
+  "version": "0.1.0",
+  "description": "A side pane showing the main thread and every subagent: model, cost and a progress bar for each, with the overall progress on top",
+  "author": { "name": "Ango Media" },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}
