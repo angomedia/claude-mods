@@ -47,7 +47,7 @@ claude plugin marketplace update claude-mods
 for mod in imessage-chat session-hud typing-bubble done-chime turn-summary text-expander files-changed break-reminder project-notes screenshot-attach agent-threads mod-list; do claude plugin update "$mod@claude-mods"; done
 ```
 
-To share them, send someone the repo link and the install lines above. A private repo needs them to have access to it.
+To share them, send someone the repo link and the install lines above.
 
 ## Mods
 
@@ -209,6 +209,7 @@ Attach your latest screenshots to a message without dragging them in.
 - **Before a message:** `/ss` sets your newest screenshot to go with the next message you send, `/ss 3` the last three. The line under the message box says so until you send; `/ss off` cancels.
 - **Just took one?** macOS shows a new screenshot as a little preview in the corner for a few seconds before saving it. If you send `;;ss` during that time, the message waits (up to about 7 seconds) for it to save, so you get the one you just took. To skip the wait, turn off **Show Floating Thumbnail** in the Screenshot app's Options (⌘⇧5).
 - **Where it looks:** the folder macOS saves screenshots to (the Desktop unless you changed it in the Screenshot app's Options), newest first, by the time each was taken. Only files named like screenshots count, so other pictures on your Desktop are left out.
+- **Only recent ones:** a screenshot more than a day old is never sent, because it's almost never the one you meant (your new one probably went to the clipboard, or wasn't taken). If that's all there is, nothing is attached and a pop-up says so (*Your newest screenshot is from 5 days ago…*), and Claude is told too, so it asks you for a new one. With `;;ss3`, any older than a day are left out and the pop-up counts them.
 - **How Claude sees them:** a mod can't put pictures into a message itself, so it tells Claude which screenshot files you attached, and Claude opens each one with its file viewer before answering. You'll see a "Read" step for each.
 - `;;ss` is taken, so don't use it as a text-expander snippet.
 

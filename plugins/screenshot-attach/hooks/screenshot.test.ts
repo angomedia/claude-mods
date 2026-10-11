@@ -74,7 +74,7 @@ test(';;ss3 attaches the last three, newest first', async ($, on) => {
 
 test('/ss 2 arms the next message, then lets go', async ($, on) => {
   const { sent, statuses } = await setup($, on)
-  const armed = await $.command.run({ command: 'ss', args: '2' })
+  const armed = await $.command.run({ command: 'ss', args: '2' } as any)
   expect(armed.text).toContain('last 2 screenshots')
   expect(statuses.at(-1)).toBe('📎 2 screenshots will go with your next message')
 
@@ -126,4 +126,44 @@ test('sends right away when no screenshot is being taken', async ($, on) => {
 
   expect(toasts.some(toast => toast.startsWith('Waiting'))).toBe(false)
   expect(sent.at(-1)?.context?.join('\n')).toContain('8.41.21')
+})
+
+const DAY = 24 * 60 * MINUTE
+
+test("a screenshot more than a day old isn't sent: the person and Claude are told why", async ($, on) => {
+  const old = [{ name: 'Screenshot 2026-09-28 at 1.58.08 PM.png', kind: 'file', size: 1, mtimeMs: NOW - 5 * DAY, isLink: false }]
+  const { sent, toasts } = await setup($, on, old)
+  await send($, 'here you go ;;ss')
+  const context = sent.at(-1)?.context?.join('\n') ?? ''
+
+  expect(sent.at(-1)?.text).toBe('here you go')
+  expect(context).toContain('was taken 5 days ago, so it was not attached')
+  expect(context).not.toContain('Read tool')
+  expect(toasts.at(-1)).toBe("Your newest screenshot is from 5 days ago (Screenshot 1.58.08 PM), so it wasn't attached. Take a new one with ⌘⇧4, or paste the image.")
+})
+
+test(';;ss3 sends the recent ones and leaves out any older than a day', async ($, on) => {
+  const files = [...desktop.filter(file => !file.name.includes('8.26.37')), { name: 'Screenshot 2026-09-30 at 9.00.00 AM.png', kind: 'file', size: 1, mtimeMs: NOW - 3 * DAY, isLink: false }]
+  const { sent, toasts } = await setup($, on, files)
+  await send($, ';;ss3')
+  const context = sent.at(-1)?.context?.join('\n') ?? ''
+
+  expect(context).toContain('8.41.21')
+  expect(context).toContain('8.39.18')
+  expect(context).not.toContain('9.00.00')
+  expect(sent.at(-1)?.text).toBe('Here are my last 2 screenshots.')
+  expect(toasts.at(-1)).toBe('📎 Attached 2 screenshots (newest 4 min ago); 1 older than a day left out')
+})
+
+test('/ss with only old screenshots sets nothing to attach', async ($, on) => {
+  const old = [{ name: 'Screenshot 2026-09-28 at 1.58.08 PM.png', kind: 'file', size: 1, mtimeMs: NOW - 5 * DAY, isLink: false }]
+  const { sent, statuses } = await setup($, on, old)
+  const armed = await $.command.run({ command: 'ss', args: '' } as any)
+
+  expect(armed.text).toContain('from 5 days ago')
+  expect(armed.text).toContain('nothing was set to attach')
+  expect(statuses).toEqual([])
+
+  await send($, 'hello')
+  expect(sent.at(-1)?.context).toBeUndefined()
 })

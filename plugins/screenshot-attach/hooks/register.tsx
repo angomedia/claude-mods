@@ -8,6 +8,9 @@ const MAX = 10
 // saves the file. A message sent in that time waits for it, this long at most.
 const SAVE_WAIT_MS = 7_000
 const POLL_MS = 400
+// A screenshot older than this is almost never the one the person means (their new one went to the
+// clipboard, or wasn't taken): it's left out, and they're told, rather than sent without a word.
+const STALE_MS = 24 * 60 * 60_000
 // ;;ss, or ;;ss3 for the last three, as a word of its own anywhere in the message.
 const TOKEN = /(^|\s);;ss(\d{1,2})?(?=$|\s|[.,!?:)\]])/gi
 // What macOS and the common screenshot apps name their files, in a few languages.
@@ -116,6 +119,20 @@ const contextFor = (shots: readonly Shot[], now: number) =>
     'Look at each one with the Read tool before you answer: they are part of what the person is showing you.',
   ].join('\n')
 
+// The screenshots recent enough to be the ones meant.
+const freshOf = (shots: readonly Shot[], now: number) => shots.filter(shot => now - shot.at <= STALE_MS)
+
+const staleNote = (newest: Shot, now: number) => `Your newest screenshot is from ${ago(now - newest.at)} (${shortName(newest.name)})`
+
+// What the model reads when the screenshot asked for was too old to send: why there's none, and what to ask for.
+const staleContextFor = (newest: Shot, now: number) =>
+  [
+    `The person asked to attach their latest screenshot, but the newest one (${newest.path}) was taken ${ago(now - newest.at)}, so it was not attached.`,
+    'If they meant to show you something on screen, ask them to take a new screenshot (⌘⇧4 saves it to a file) or paste the image.',
+  ].join(' ')
+
+const leftOut = (count: number) => (count === 0 ? '' : `; ${count} older than a day left out`)
+
 const HELP = [
   '**In a message:** put `;;ss` anywhere and your latest screenshot goes with it; `;;ss3` sends the last three.',
   '**Before a message:** `/ss` attaches your latest screenshot to the next message you send, `/ss 3` the last three, `/ss off` cancels.',
@@ -151,21 +168,26 @@ export const register: Register = on => {
     }
 
     const count = clamp(arg === '' ? 1 : Number(arg))
-    const [{ shots, folder, home }, now] = await Promise.all([latestShots($, count), $.clock.now()])
+    const [{ shots: found, folder, home }, now] = await Promise.all([latestShots($, count), $.clock.now()])
+    const shots = freshOf(found, now)
+    const newest = shots[0]
 
-    if (shots.length === 0) {
+    if (found[0] === undefined) {
       return { text: `There are no screenshots in \`${tidy(folder, home)}\` yet. Take one with ⌘⇧4, then try again.` }
+    }
+
+    if (newest === undefined) {
+      return { text: `${staleNote(found[0], now)}, so nothing was set to attach. Take a new one with ⌘⇧4, then run /ss again.` }
     }
 
     await update($, pending, () => shots.length)
     $.ui.status(`📎 ${shots.length === 1 ? '1 screenshot' : `${shots.length} screenshots`} will go with your next message`)
-    const newest = shots[0]
 
     return {
       text:
-        shots.length === 1 && newest !== undefined
-          ? `Your next message will include ${shortName(newest.name)} (${ago(now - newest.at)}).`
-          : `Your next message will include your last ${shots.length} screenshots (newest ${ago(now - (newest?.at ?? now))}).`,
+        shots.length === 1
+          ? `Your next message will include ${shortName(newest.name)} (${ago(now - newest.at)})${leftOut(found.length - 1)}.`
+          : `Your next message will include your last ${shots.length} screenshots (newest ${ago(now - newest.at)})${leftOut(found.length - shots.length)}.`,
     }
   })
 
@@ -189,20 +211,29 @@ export const register: Register = on => {
     await update($, pending, () => 0)
     $.ui.status(undefined)
     await waitForSaving($, next.signal).catch(() => undefined)
-    const [{ shots, folder, home }, now] = await Promise.all([latestShots($, wanted), $.clock.now()])
+    const [{ shots: found, folder, home }, now] = await Promise.all([latestShots($, wanted), $.clock.now()])
+    const shots = freshOf(found, now)
+    const newest = shots[0]
     const text = stripped.replace(/[ \t]{2,}/g, ' ').trim()
 
-    if (shots.length === 0) {
+    if (found[0] === undefined) {
       $.ui.toast(`No screenshots found in ${tidy(folder, home)}, so none were attached.`)
 
       return next({ ...e, text: text === '' ? e.text : text })
     }
 
-    const newest = shots[0]
+    // Only old ones: none goes, the person sees why, and so does Claude.
+    if (newest === undefined) {
+      $.ui.toast(`${staleNote(found[0], now)}, so it wasn't attached. Take a new one with ⌘⇧4, or paste the image.`, { timeoutMs: 8_000 })
+
+      return next({ ...e, text: text === '' ? e.text : text, context: [...(e.context ?? []), staleContextFor(found[0], now)] })
+    }
+
+    const skipped = leftOut(found.length - shots.length)
     $.ui.toast(
-      shots.length === 1 && newest !== undefined
-        ? `📎 Attached ${shortName(newest.name)} (${ago(now - newest.at)})`
-        : `📎 Attached ${shots.length} screenshots (newest ${ago(now - (newest?.at ?? now))})`,
+      shots.length === 1
+        ? `📎 Attached ${shortName(newest.name)} (${ago(now - newest.at)})${skipped}`
+        : `📎 Attached ${shots.length} screenshots (newest ${ago(now - newest.at)})${skipped}`,
     )
 
     return next({
