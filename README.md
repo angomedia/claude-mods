@@ -17,6 +17,7 @@ Mods for [Claude Code](https://claude.com/claude-code): plugins that change how 
 | [project-notes](#project-notes) | A checklist pane for each project, kept between sessions |
 | [screenshot-attach](#screenshot-attach) | Type `;;ss` and your latest screenshot goes with your message |
 | [agent-threads](#agent-threads) | A pane with the main thread and every subagent: model, cost and a progress bar each |
+| [mod-list](#mod-list) | A table of your installed mods and how to switch each one off or on |
 
 Add this repo as a plugin marketplace, then install the mods you want:
 
@@ -31,7 +32,7 @@ claude plugin install typing-bubble@claude-mods
 Or install them all at once:
 
 ```bash
-for mod in imessage-chat session-hud typing-bubble done-chime turn-summary text-expander files-changed break-reminder project-notes screenshot-attach agent-threads; do claude plugin install "$mod@claude-mods"; done
+for mod in imessage-chat session-hud typing-bubble done-chime turn-summary text-expander files-changed break-reminder project-notes screenshot-attach agent-threads mod-list; do claude plugin install "$mod@claude-mods"; done
 ```
 
 Start a new Claude Code session to load them. Mods need a recent Claude Code (2.1.286 or later is tested). The sounds, banners and "open file" buttons use macOS tools; on other systems those parts stay quiet and the rest works.
@@ -43,7 +44,7 @@ claude plugin marketplace update claude-mods
 ```
 
 ```bash
-for mod in imessage-chat session-hud typing-bubble done-chime turn-summary text-expander files-changed break-reminder project-notes screenshot-attach agent-threads; do claude plugin update "$mod@claude-mods"; done
+for mod in imessage-chat session-hud typing-bubble done-chime turn-summary text-expander files-changed break-reminder project-notes screenshot-attach agent-threads mod-list; do claude plugin update "$mod@claude-mods"; done
 ```
 
 To share them, send someone the repo link and the install lines above. A private repo needs them to have access to it.
@@ -226,6 +227,19 @@ Attach your latest screenshots to a message without dragging them in.
 - In a narrow terminal a pane can't open by itself; a pop-up points you to `/threads` instead.
 
 It runs nothing on your computer. The only thing it keeps between sessions is how many tool calls each kind of agent took, to measure the estimated bars against.
+
+### mod-list
+
+`/mods` opens a pane with a table of every mod you have installed: its name, what it does in a few words, and how to switch it off and on.
+
+- Most mods have their own switch for the session, such as `/hud off` and `/hud on`; pane mods open and close with their command. Mods with no switch of their own (text-expander, screenshot-attach) say so.
+- A mod you've disabled stays in the table, marked *disabled*, with the command that brings it back.
+- Under the table: how to turn any mod off everywhere, with `claude plugin disable <name>@<marketplace>` in a terminal and a new session.
+- Plugins from other marketplaces are listed too, with the start of their own description and their slash commands.
+- Mods this session loads from a folder without installing them are listed too, marked *(dev)*: mods made in the session, and folders in `CLAUDE_CODE_PLUGIN_DIRS`. An installed mod with a dev copy loaded says *(dev copy loaded)*. (A `--plugin-dir` flag leaves nothing a mod can read, so those don't show.)
+- The list is read afresh each time the pane opens. `/mods` again closes it.
+
+**What it reads on your computer:** your Claude Code settings (which plugins are enabled), Claude Code's list of installed plugins in `~/.claude/plugins/installed_plugins.json`, the session's dev-mods folder and `CLAUDE_CODE_PLUGIN_DIRS`, and each plugin's `plugin.json` for its description. It runs nothing and changes nothing.
 
 ## Adding a mod
 

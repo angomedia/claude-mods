@@ -104,6 +104,15 @@
       },
       "source": "./plugins/agent-threads",
       "category": "productivity"
+    },
+    {
+      "name": "mod-list",
+      "description": "A side pane with a table of every installed mod: what it does, whether it's on, and how to switch it off or on",
+      "author": {
+        "name": "Ango Media"
+      },
+      "source": "./plugins/mod-list",
+      "category": "productivity"
     }
   ]
 }

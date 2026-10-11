@@ -1,0 +1,8 @@
+{
+  "name": "mod-list",
+  "version": "0.1.0",
+  "description": "A side pane with a table of every installed mod: what it does, whether it's on, and how to switch it off or on",
+  "author": { "name": "Ango Media" },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}
