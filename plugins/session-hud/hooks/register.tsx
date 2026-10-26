@@ -347,8 +347,17 @@ export const register: Register = on => {
       void freshStart($)
     }
 
+    // A graphical surface's button is taller than a row of text, so there a row of space keeps the two
+    // apart; the card's three rows still hold them. The terminal's buttons are one row each.
     const actions = (
-      <Box key="actions" flexDirection="column" alignItems="flex-end" justifyContent="center" gap={0}>
+      <Box
+        key="actions"
+        flexDirection="column"
+        alignItems="flex-end"
+        justifyContent="center"
+        rowGap={e.surface === 'terminal' ? 0 : 1}
+        flexShrink={0}
+      >
         <Button
           key="compact"
           label={current === 'compacting' ? 'Compacting…' : 'Compact'}
